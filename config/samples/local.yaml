@@ -1,0 +1,53 @@
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorProvider
+metadata:
+  name: local-nvidia
+spec:
+  driver: kubernetes-device-plugin
+  deviceKinds: [GPU]
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorPool
+metadata:
+  name: local-nvidia
+  labels:
+    accelerator.qcrs.io/tier: local
+spec:
+  providerRef:
+    name: local-nvidia
+  location: Local
+  deviceType: GPU
+  priority: 100
+  local:
+    resourceName: nvidia.com/gpu
+    nodeSelector:
+      nvidia.com/gpu.present: "true"
+    vendorLabelKey: accelerator.qcrs.io/vendor
+    modelLabelKey: nvidia.com/gpu.product
+    memoryLabelKey: accelerator.qcrs.io/gpu-memory
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorWorkload
+metadata:
+  name: local-first-example
+  namespace: default
+spec:
+  accelerator:
+    deviceType: GPU
+    vendor: nvidia
+    count: 1
+    containerName: worker
+  placement:
+    mode: Auto
+    order: [Local, Remote]
+    reservationTTL: 5m
+  podTemplate:
+    metadata:
+      labels:
+        app: local-first-example
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: ubuntu:24.04
+          command: ["/bin/sh", "-c", "echo accelerator workload interface; sleep 30"]

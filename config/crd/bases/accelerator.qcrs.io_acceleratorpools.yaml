@@ -1,0 +1,132 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: acceleratorpools.accelerator.qcrs.io
+spec:
+  group: accelerator.qcrs.io
+  scope: Cluster
+  names:
+    kind: AcceleratorPool
+    listKind: AcceleratorPoolList
+    plural: acceleratorpools
+    singular: acceleratorpool
+    shortNames: [apool]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Location
+          type: string
+          jsonPath: .spec.location
+        - name: Type
+          type: string
+          jsonPath: .spec.deviceType
+        - name: Available
+          type: integer
+          jsonPath: .status.capacity.available
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required: [providerRef, location, deviceType]
+              x-kubernetes-validations:
+                - rule: "self.location == 'Local' ? has(self.local) && !has(self.remote) : has(self.remote) && !has(self.local)"
+                  message: exactly one location-specific configuration must be set
+              properties:
+                providerRef:
+                  type: object
+                  required: [name]
+                  properties:
+                    name:
+                      type: string
+                      minLength: 1
+                location:
+                  type: string
+                  enum: [Local, Remote]
+                deviceType:
+                  type: string
+                  enum: [GPU, NPU]
+                priority:
+                  type: integer
+                  format: int32
+                unschedulable:
+                  type: boolean
+                local:
+                  type: object
+                  required: [resourceName]
+                  properties:
+                    resourceName:
+                      type: string
+                      minLength: 1
+                    nodeSelector:
+                      type: object
+                      additionalProperties:
+                        type: string
+                    vendorLabelKey:
+                      type: string
+                    modelLabelKey:
+                      type: string
+                    memoryLabelKey:
+                      type: string
+                remote:
+                  type: object
+                  properties:
+                    endpointSelector:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                  format: int64
+                capacity:
+                  type: object
+                  properties:
+                    total:
+                      type: integer
+                      format: int32
+                    available:
+                      type: integer
+                      format: int32
+                    reserved:
+                      type: integer
+                      format: int32
+                readyEndpoints:
+                  type: integer
+                  format: int32
+                conditions:
+                  type: array
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys: [type]
+                  items:
+                    type: object
+                    required: [lastTransitionTime, message, reason, status, type]
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      message:
+                        type: string
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", Unknown]
+                      type:
+                        type: string

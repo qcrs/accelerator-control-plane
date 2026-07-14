@@ -1,0 +1,419 @@
+package inventory
+
+import (
+	"context"
+	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+	"time"
+
+	acceleratorv1alpha1 "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
+	"github.com/qcrs/accelerator-control-plane/internal/contracts"
+	coordinationv1 "k8s.io/api/coordination/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+type KubernetesReader struct {
+	Client client.Reader
+	Now    func() time.Time
+}
+
+func NewKubernetesReader(reader client.Reader) *KubernetesReader {
+	return &KubernetesReader{Client: reader, Now: time.Now}
+}
+
+func (r *KubernetesReader) ListCandidates(ctx context.Context, request contracts.SelectionRequest) ([]contracts.Candidate, error) {
+	if r.Client == nil {
+		return nil, contracts.NewError(contracts.ErrorKindInvalid, "read inventory", "Kubernetes client is nil")
+	}
+
+	var pools acceleratorv1alpha1.AcceleratorPoolList
+	var providers acceleratorv1alpha1.AcceleratorProviderList
+	var nodes corev1.NodeList
+	var pods corev1.PodList
+	var endpoints acceleratorv1alpha1.AcceleratorEndpointList
+	var leases acceleratorv1alpha1.AcceleratorLeaseList
+	var heartbeatLeases coordinationv1.LeaseList
+
+	objects := []client.ObjectList{&pools, &providers, &nodes, &pods, &endpoints, &leases, &heartbeatLeases}
+	for _, object := range objects {
+		if err := r.Client.List(ctx, object); err != nil {
+			return nil, contracts.WrapError(contracts.ErrorKindTransient, "read inventory", fmt.Sprintf("list %T", object), err)
+		}
+	}
+
+	providerKinds := make(map[string]map[acceleratorv1alpha1.DeviceKind]struct{}, len(providers.Items))
+	for index := range providers.Items {
+		provider := &providers.Items[index]
+		kinds := make(map[acceleratorv1alpha1.DeviceKind]struct{}, len(provider.Spec.DeviceKinds))
+		for _, kind := range provider.Spec.DeviceKinds {
+			kinds[kind] = struct{}{}
+		}
+		providerKinds[provider.Name] = kinds
+	}
+	heartbeats := make(map[string]*coordinationv1.Lease, len(heartbeatLeases.Items))
+	for index := range heartbeatLeases.Items {
+		lease := &heartbeatLeases.Items[index]
+		heartbeats[lease.Namespace+"/"+lease.Name] = lease
+	}
+
+	poolSelector := labels.Everything()
+	if request.Placement.PoolSelector != nil {
+		selector, err := metav1.LabelSelectorAsSelector(request.Placement.PoolSelector)
+		if err != nil {
+			return nil, contracts.WrapError(contracts.ErrorKindInvalid, "read inventory", "invalid pool selector", err)
+		}
+		poolSelector = selector
+	}
+
+	occupied := OccupiedRemoteDevices(leases.Items)
+	candidates := make([]contracts.Candidate, 0, len(nodes.Items)+len(endpoints.Items))
+	for index := range pools.Items {
+		pool := &pools.Items[index]
+		if pool.Spec.Unschedulable || pool.Spec.DeviceType != request.Accelerator.DeviceType ||
+			!poolSelector.Matches(labels.Set(pool.Labels)) {
+			continue
+		}
+		kinds, exists := providerKinds[pool.Spec.ProviderRef.Name]
+		if !exists {
+			continue
+		}
+		if _, supported := kinds[pool.Spec.DeviceType]; !supported {
+			continue
+		}
+
+		switch pool.Spec.Location {
+		case acceleratorv1alpha1.ExecutionModeLocal:
+			candidates = append(candidates, localCandidates(pool, &request.PodTemplate.Spec, nodes.Items, pods.Items, leases.Items)...)
+		case acceleratorv1alpha1.ExecutionModeRemote:
+			candidates = append(candidates, remoteCandidates(pool, endpoints.Items, heartbeats, occupied, r.now())...)
+		}
+	}
+	return candidates, nil
+}
+
+func (r *KubernetesReader) now() time.Time {
+	if r.Now == nil {
+		return time.Now()
+	}
+	return r.Now()
+}
+
+func localCandidates(
+	pool *acceleratorv1alpha1.AcceleratorPool,
+	podSpec *corev1.PodSpec,
+	nodes []corev1.Node,
+	pods []corev1.Pod,
+	leases []acceleratorv1alpha1.AcceleratorLease,
+) []contracts.Candidate {
+	if pool.Spec.Local == nil || pool.Spec.Local.ResourceName == "" {
+		return nil
+	}
+	result := make([]contracts.Candidate, 0, len(nodes))
+	for index := range nodes {
+		node := &nodes[index]
+		if !nodeReady(node) || !containsLabels(node.Labels, pool.Spec.Local.NodeSelector) || !nodeMatchesPod(node, podSpec) {
+			continue
+		}
+		allocatableQuantity := node.Status.Allocatable[pool.Spec.Local.ResourceName]
+		allocatable := allocatableQuantity.Value()
+		used := RequestedOnNode(pods, node.Name, pool.Spec.Local.ResourceName)
+		reserved := ReservedOnNode(leases, pods, pool.Name, node.Name)
+		available := allocatable - used - reserved
+		if available < 0 {
+			available = 0
+		}
+
+		vendor := labelOr(node.Labels, pool.Spec.Local.VendorLabelKey, vendorFromResourceName(pool.Spec.Local.ResourceName))
+		model := labelOr(node.Labels, pool.Spec.Local.ModelLabelKey, "")
+		memory := quantityLabel(node.Labels, pool.Spec.Local.MemoryLabelKey)
+		result = append(result, contracts.Candidate{
+			ID:           "local/" + pool.Name + "/" + node.Name,
+			ProviderName: pool.Spec.ProviderRef.Name,
+			PoolName:     pool.Name,
+			PoolPriority: pool.Spec.Priority,
+			Mode:         acceleratorv1alpha1.ExecutionModeLocal,
+			DeviceType:   pool.Spec.DeviceType,
+			NodeName:     node.Name,
+			ResourceName: pool.Spec.Local.ResourceName,
+			Vendor:       vendor,
+			Model:        model,
+			DeviceMemory: memory,
+			Labels:       mergeLabels(pool.Labels, node.Labels),
+			Available:    int32(available),
+			Ready:        true,
+		})
+	}
+	return result
+}
+
+func remoteCandidates(
+	pool *acceleratorv1alpha1.AcceleratorPool,
+	endpoints []acceleratorv1alpha1.AcceleratorEndpoint,
+	heartbeats map[string]*coordinationv1.Lease,
+	occupied map[string]map[string]struct{},
+	now time.Time,
+) []contracts.Candidate {
+	if pool.Spec.Remote == nil {
+		return nil
+	}
+	selector, err := metav1.LabelSelectorAsSelector(&pool.Spec.Remote.EndpointSelector)
+	if err != nil {
+		return nil
+	}
+	result := make([]contracts.Candidate, 0, len(endpoints))
+	for index := range endpoints {
+		endpoint := &endpoints[index]
+		if endpoint.Spec.PoolRef.Name != pool.Name || endpoint.Spec.Unschedulable ||
+			!selector.Matches(labels.Set(endpoint.Labels)) {
+			continue
+		}
+		ready, reason := endpointReady(endpoint, heartbeats, now)
+		freeDevices := make([]contracts.Device, 0, len(endpoint.Status.Devices))
+		for _, device := range endpoint.Status.Devices {
+			if device.Health != acceleratorv1alpha1.DeviceHealthHealthy {
+				continue
+			}
+			if _, inUse := occupied[endpoint.Name][device.ID]; inUse {
+				continue
+			}
+			freeDevices = append(freeDevices, contracts.Device{
+				ID:         device.ID,
+				Vendor:     device.Vendor,
+				Model:      device.Model,
+				Memory:     device.Memory.DeepCopy(),
+				Attributes: copyStringMap(device.Attributes),
+			})
+		}
+		sort.Slice(freeDevices, func(i, j int) bool { return freeDevices[i].ID < freeDevices[j].ID })
+		result = append(result, contracts.Candidate{
+			ID:             "remote/" + pool.Name + "/" + endpoint.Name,
+			ProviderName:   pool.Spec.ProviderRef.Name,
+			PoolName:       pool.Name,
+			PoolPriority:   pool.Spec.Priority,
+			Mode:           acceleratorv1alpha1.ExecutionModeRemote,
+			DeviceType:     pool.Spec.DeviceType,
+			EndpointName:   endpoint.Name,
+			ControlAddress: endpoint.Status.ControlAddress,
+			Labels:         mergeLabels(pool.Labels, endpoint.Labels),
+			Available:      int32(len(freeDevices)),
+			Devices:        freeDevices,
+			Ready:          ready,
+			Reason:         reason,
+		})
+	}
+	return result
+}
+
+func endpointReady(
+	endpoint *acceleratorv1alpha1.AcceleratorEndpoint,
+	heartbeats map[string]*coordinationv1.Lease,
+	now time.Time,
+) (bool, string) {
+	if !conditionTrue(endpoint.Status.Conditions, "AgentReady") {
+		return false, "AgentReady is not true"
+	}
+	if !conditionTrue(endpoint.Status.Conditions, "InventoryReady") {
+		return false, "InventoryReady is not true"
+	}
+	if endpoint.Status.HeartbeatLeaseRef == nil {
+		return false, "heartbeat Lease is not reported"
+	}
+	key := endpoint.Status.HeartbeatLeaseRef.Namespace + "/" + endpoint.Status.HeartbeatLeaseRef.Name
+	heartbeat := heartbeats[key]
+	if heartbeat == nil || heartbeat.Spec.RenewTime == nil || heartbeat.Spec.LeaseDurationSeconds == nil {
+		return false, "heartbeat Lease is incomplete"
+	}
+	expiresAt := heartbeat.Spec.RenewTime.Add(time.Duration(*heartbeat.Spec.LeaseDurationSeconds) * time.Second)
+	if !now.Before(expiresAt) {
+		return false, "heartbeat Lease expired"
+	}
+	if endpoint.Status.ControlAddress == "" {
+		return false, "Agent control address is empty"
+	}
+	return true, ""
+}
+
+func nodeReady(node *corev1.Node) bool {
+	for _, condition := range node.Status.Conditions {
+		if condition.Type == corev1.NodeReady {
+			return condition.Status == corev1.ConditionTrue
+		}
+	}
+	return false
+}
+
+func nodeMatchesPod(node *corev1.Node, podSpec *corev1.PodSpec) bool {
+	if podSpec == nil {
+		return true
+	}
+	if node.Spec.Unschedulable || (podSpec.NodeName != "" && podSpec.NodeName != node.Name) ||
+		!containsLabels(node.Labels, podSpec.NodeSelector) || !toleratesHardTaints(node.Spec.Taints, podSpec.Tolerations) {
+		return false
+	}
+	if podSpec.Affinity == nil || podSpec.Affinity.NodeAffinity == nil ||
+		podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution == nil {
+		return true
+	}
+	selector := podSpec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution
+	for _, term := range selector.NodeSelectorTerms {
+		if nodeSelectorTermMatches(node, term) {
+			return true
+		}
+	}
+	return false
+}
+
+func nodeSelectorTermMatches(node *corev1.Node, term corev1.NodeSelectorTerm) bool {
+	for _, requirement := range term.MatchExpressions {
+		if !selectorRequirementMatches(node.Labels[requirement.Key], hasKey(node.Labels, requirement.Key), requirement) {
+			return false
+		}
+	}
+	for _, requirement := range term.MatchFields {
+		if requirement.Key != "metadata.name" || !selectorRequirementMatches(node.Name, true, requirement) {
+			return false
+		}
+	}
+	return true
+}
+
+func selectorRequirementMatches(value string, exists bool, requirement corev1.NodeSelectorRequirement) bool {
+	switch requirement.Operator {
+	case corev1.NodeSelectorOpIn:
+		return exists && stringIn(value, requirement.Values)
+	case corev1.NodeSelectorOpNotIn:
+		return !exists || !stringIn(value, requirement.Values)
+	case corev1.NodeSelectorOpExists:
+		return exists
+	case corev1.NodeSelectorOpDoesNotExist:
+		return !exists
+	case corev1.NodeSelectorOpGt, corev1.NodeSelectorOpLt:
+		if !exists || len(requirement.Values) != 1 {
+			return false
+		}
+		actual, actualErr := strconv.ParseInt(value, 10, 64)
+		expected, expectedErr := strconv.ParseInt(requirement.Values[0], 10, 64)
+		if actualErr != nil || expectedErr != nil {
+			return false
+		}
+		if requirement.Operator == corev1.NodeSelectorOpGt {
+			return actual > expected
+		}
+		return actual < expected
+	default:
+		return false
+	}
+}
+
+func toleratesHardTaints(taints []corev1.Taint, tolerations []corev1.Toleration) bool {
+	for _, taint := range taints {
+		if taint.Effect != corev1.TaintEffectNoSchedule && taint.Effect != corev1.TaintEffectNoExecute {
+			continue
+		}
+		tolerated := false
+		for _, toleration := range tolerations {
+			if toleration.Effect != "" && toleration.Effect != taint.Effect {
+				continue
+			}
+			switch toleration.Operator {
+			case "", corev1.TolerationOpEqual:
+				tolerated = toleration.Key == taint.Key && toleration.Value == taint.Value
+			case corev1.TolerationOpExists:
+				tolerated = toleration.Key == "" || toleration.Key == taint.Key
+			}
+			if tolerated {
+				break
+			}
+		}
+		if !tolerated {
+			return false
+		}
+	}
+	return true
+}
+
+func hasKey(values map[string]string, key string) bool {
+	_, exists := values[key]
+	return exists
+}
+
+func stringIn(value string, values []string) bool {
+	for _, candidate := range values {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+func conditionTrue(conditions []metav1.Condition, conditionType string) bool {
+	for _, condition := range conditions {
+		if condition.Type == conditionType {
+			return condition.Status == metav1.ConditionTrue
+		}
+	}
+	return false
+}
+
+func quantityLabel(values map[string]string, key string) resource.Quantity {
+	if key == "" || values[key] == "" {
+		return resource.Quantity{}
+	}
+	quantity, err := resource.ParseQuantity(values[key])
+	if err != nil {
+		return resource.Quantity{}
+	}
+	return quantity
+}
+
+func labelOr(values map[string]string, key, fallback string) string {
+	if key != "" && values[key] != "" {
+		return values[key]
+	}
+	return fallback
+}
+
+func vendorFromResourceName(name corev1.ResourceName) string {
+	prefix, _, found := strings.Cut(string(name), ".com/")
+	if !found {
+		return ""
+	}
+	return prefix
+}
+
+func containsLabels(actual, required map[string]string) bool {
+	for key, value := range required {
+		if actual[key] != value {
+			return false
+		}
+	}
+	return true
+}
+
+func mergeLabels(first, second map[string]string) map[string]string {
+	result := make(map[string]string, len(first)+len(second))
+	for key, value := range first {
+		result[key] = value
+	}
+	for key, value := range second {
+		result[key] = value
+	}
+	return result
+}
+
+func copyStringMap(source map[string]string) map[string]string {
+	if source == nil {
+		return nil
+	}
+	result := make(map[string]string, len(source))
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
+}

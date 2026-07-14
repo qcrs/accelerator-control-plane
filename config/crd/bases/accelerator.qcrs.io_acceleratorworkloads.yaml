@@ -1,0 +1,143 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: acceleratorworkloads.accelerator.qcrs.io
+spec:
+  group: accelerator.qcrs.io
+  scope: Namespaced
+  names:
+    kind: AcceleratorWorkload
+    listKind: AcceleratorWorkloadList
+    plural: acceleratorworkloads
+    singular: acceleratorworkload
+    shortNames: [aw]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Mode
+          type: string
+          jsonPath: .status.selectedMode
+        - name: Pod
+          type: string
+          jsonPath: .status.podRef.name
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          x-kubernetes-validations:
+            - rule: "!has(oldSelf.status) || !has(oldSelf.status.allocationRef) || size(oldSelf.status.allocationRef) == 0 || self.spec == oldSelf.spec"
+              message: spec is immutable after allocation starts
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required: [accelerator, podTemplate]
+              properties:
+                accelerator:
+                  type: object
+                  required: [deviceType, count]
+                  properties:
+                    deviceType:
+                      type: string
+                      enum: [GPU, NPU]
+                    vendor:
+                      type: string
+                    count:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                      maximum: 128
+                    memory:
+                      x-kubernetes-int-or-string: true
+                      anyOf:
+                        - type: integer
+                        - type: string
+                    models:
+                      type: array
+                      items:
+                        type: string
+                    matchLabels:
+                      type: object
+                      additionalProperties:
+                        type: string
+                    containerName:
+                      type: string
+                placement:
+                  type: object
+                  properties:
+                    mode:
+                      type: string
+                      default: Auto
+                      enum: [Auto, LocalOnly, RemoteOnly]
+                    order:
+                      type: array
+                      items:
+                        type: string
+                        enum: [Local, Remote]
+                    poolSelector:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    reservationTTL:
+                      type: string
+                      default: 5m
+                podTemplate:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                  format: int64
+                phase:
+                  type: string
+                  enum: [Pending, Reserving, Starting, Running, Succeeded, Failed, Terminating]
+                selectedMode:
+                  type: string
+                  enum: [Local, Remote]
+                allocationRef:
+                  type: string
+                allocationAttempt:
+                  type: integer
+                  format: int32
+                podRef:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                decision:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                conditions:
+                  type: array
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys: [type]
+                  items:
+                    type: object
+                    required: [lastTransitionTime, message, reason, status, type]
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      message:
+                        type: string
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", Unknown]
+                      type:
+                        type: string

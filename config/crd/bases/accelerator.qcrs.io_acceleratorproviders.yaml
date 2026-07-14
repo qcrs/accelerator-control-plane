@@ -1,0 +1,101 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: acceleratorproviders.accelerator.qcrs.io
+spec:
+  group: accelerator.qcrs.io
+  scope: Cluster
+  names:
+    kind: AcceleratorProvider
+    listKind: AcceleratorProviderList
+    plural: acceleratorproviders
+    singular: acceleratorprovider
+    shortNames: [aprovider]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Driver
+          type: string
+          jsonPath: .spec.driver
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].status
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required: [driver, deviceKinds]
+              properties:
+                driver:
+                  type: string
+                  minLength: 1
+                deviceKinds:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+                    enum: [GPU, NPU]
+                clientRuntime:
+                  type: object
+                  required: [image]
+                  properties:
+                    image:
+                      type: string
+                      minLength: 1
+                    sourcePath:
+                      type: string
+                    mountPath:
+                      type: string
+                trustBundleSecretRef:
+                  type: object
+                  required: [name]
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                parameters:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                  format: int64
+                conditions:
+                  type: array
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys: [type]
+                  items:
+                    type: object
+                    required: [lastTransitionTime, message, reason, status, type]
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      message:
+                        type: string
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", Unknown]
+                      type:
+                        type: string

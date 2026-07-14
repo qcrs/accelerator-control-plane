@@ -1,0 +1,132 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: acceleratorendpoints.accelerator.qcrs.io
+spec:
+  group: accelerator.qcrs.io
+  scope: Cluster
+  names:
+    kind: AcceleratorEndpoint
+    listKind: AcceleratorEndpointList
+    plural: acceleratorendpoints
+    singular: acceleratorendpoint
+    shortNames: [aendpoint]
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Pool
+          type: string
+          jsonPath: .spec.poolRef.name
+        - name: AgentReady
+          type: string
+          jsonPath: .status.conditions[?(@.type=="AgentReady")].status
+      schema:
+        openAPIV3Schema:
+          type: object
+          required: [spec]
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              required: [poolRef]
+              properties:
+                poolRef:
+                  type: object
+                  required: [name]
+                  properties:
+                    name:
+                      type: string
+                      minLength: 1
+                unschedulable:
+                  type: boolean
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                  format: int64
+                agentID:
+                  type: string
+                controlAddress:
+                  type: string
+                runtime:
+                  type: object
+                  properties:
+                    driver:
+                      type: string
+                    version:
+                      type: string
+                    apiVersion:
+                      type: string
+                heartbeatLeaseRef:
+                  type: object
+                  required: [namespace, name]
+                  properties:
+                    namespace:
+                      type: string
+                    name:
+                      type: string
+                lastInventoryTime:
+                  type: string
+                  format: date-time
+                devices:
+                  type: array
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys: [id]
+                  items:
+                    type: object
+                    required: [id, health]
+                    properties:
+                      id:
+                        type: string
+                        minLength: 1
+                      uuid:
+                        type: string
+                      vendor:
+                        type: string
+                      model:
+                        type: string
+                      memory:
+                        x-kubernetes-int-or-string: true
+                        anyOf:
+                          - type: integer
+                          - type: string
+                      health:
+                        type: string
+                        enum: [Healthy, Unhealthy, Unknown]
+                      attributes:
+                        type: object
+                        additionalProperties:
+                          type: string
+                conditions:
+                  type: array
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys: [type]
+                  items:
+                    type: object
+                    required: [lastTransitionTime, message, reason, status, type]
+                    properties:
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      message:
+                        type: string
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      reason:
+                        type: string
+                      status:
+                        type: string
+                        enum: ["True", "False", Unknown]
+                      type:
+                        type: string
