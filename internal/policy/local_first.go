@@ -202,6 +202,7 @@ func selectRemote(count int32, candidates []eligibleCandidate) (contracts.Decisi
 				Targets: []acceleratorv1alpha1.AllocationTarget{{
 					EndpointName: candidates[index].candidate.EndpointName,
 					DeviceIDs:    ids,
+					Exclusive:    candidates[index].candidate.Exclusive,
 				}},
 				Policy: LocalFirstPolicyName,
 				Reason: fmt.Sprintf("selected %d remote device(s) from endpoint %s in pool %s", count, candidates[index].candidate.EndpointName, first.PoolName),
@@ -209,6 +210,9 @@ func selectRemote(count int32, candidates []eligibleCandidate) (contracts.Decisi
 		}
 		for index := start; index < end && remaining > 0; index++ {
 			eligible := candidates[index]
+			if eligible.candidate.Exclusive {
+				continue
+			}
 			take := int32(len(eligible.devices))
 			if take > remaining {
 				take = remaining

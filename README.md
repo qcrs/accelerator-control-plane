@@ -1,32 +1,48 @@
 # Accelerator Control Plane
 
-This project implements the S1 control-plane interfaces for startup-time local
-or remote accelerator selection. An `AcceleratorWorkload` is the canonical
-entry point; the controller selects capacity, creates an `AcceleratorLease`,
-and then creates one concrete Pod.
+This project implements startup-time local or remote accelerator selection.
+Applications submit an `AcceleratorWorkload`; the controller selects capacity,
+creates a durable `AcceleratorLease`, injects the selected runtime, and creates
+one concrete Pod.
 
 ## Implemented
 
-- Cluster-scoped Provider, Pool, and Endpoint APIs.
+- Cluster-scoped Provider, Pool, and declarative remote Endpoint APIs.
 - Namespaced Workload and allocation Lease APIs.
-- Kubernetes Node/Pod and Remote Agent inventory normalization.
-- Deterministic local-first selection and lease state transitions.
-- Local extended-resource injection and Lupine client injection.
-- Agent heartbeat and inventory reporting skeletons.
-- Provider, allocator, Agent transport, probe, and session provisioner
-  extension interfaces.
+- Kubernetes Node/Pod and static remote runtime inventory normalization.
+- Deterministic local-first selection with central capacity accounting.
+- Local device-plugin resource injection.
+- MIT-licensed Cricket remote-CUDA client injection through a pluggable
+  Provider. Its bundled libtirpc dependency uses a permissive BSD-style
+  license.
+- Endpoint-exclusive allocation for remote runtimes without per-device tenant
+  isolation.
+- Immutable endpoint snapshots in each Lease binding.
+
+## Architecture boundary
+
+The control plane does not implement CUDA RPC and does not deploy a custom
+remote Agent. Cricket supplies `cricket-client.so` and
+`cricket-rpc-server`. This repository owns only selection, reservation,
+runtime materialization, and Pod mutation.
+
+Remote endpoints are declared in Kubernetes. The endpoint `spec` contains the
+server address, runtime version, visible devices, and non-secret connection
+parameters. An optional independent observer may publish a `Ready` condition,
+but no observer is required for a static S1 deployment.
 
 ## Deliberate boundaries
 
-- Startup-time S1 selection only. There is no fallback after a Pod starts,
-  checkpoint recovery, or live migration.
-- Whole-device allocation only. MIG, fractional GPU, and NPU runtimes are
-  extension points.
-- The Agent RPC transport, hardware probe, and per-lease Lupine process or
-  container provisioner are not implemented. Unsupported placeholders fail
-  explicitly.
-- Cross-namespace trust-bundle copying is not implemented. A referenced CA
-  Secret must currently be in the Workload namespace.
+- S1 startup-time selection only. There is no restart fallback, checkpoint
+  recovery, or live migration.
+- Whole-device accounting only. MIG, fractional GPU, and NPU remote runtimes
+  remain extension points.
+- Cricket endpoints are allocated exclusively. A request never aggregates
+  multiple Cricket servers into one client process.
+- Cricket requires dynamically linked CUDA libraries. Framework compatibility
+  is not implied by successful injection.
+- Cricket has no built-in TLS or authentication. Network isolation is an
+  operator responsibility.
 - Arbitrary Pods are not intercepted. Applications submit an
   `AcceleratorWorkload` containing a `PodTemplateSpec`.
 
@@ -34,18 +50,25 @@ and then creates one concrete Pod.
 
 ```text
 AcceleratorWorkload
-  -> inventory snapshot
+  -> normalized local and remote inventory
   -> local-first policy decision
-  -> AcceleratorLease (Pending -> Reserved)
-  -> provider RuntimePlan + Pod mutation
+  -> AcceleratorLease (capacity is accounted immediately)
+  -> immutable remote endpoint binding
+  -> Provider RuntimePlan + Pod mutation
   -> Pod + bound Lease
-  -> release when Pod terminates or Workload is deleted
+  -> central capacity release when the Pod terminates
 ```
 
-The controller uses the Kubernetes device-plugin resource as the final local
-capacity gate. Remote capacity is only authoritative when a Remote Agent
-implements atomic, idempotent `Reserve` and returns endpoints whose visible
-devices are restricted to that lease.
+The Kubernetes scheduler and configured device plugin remain authoritative for
+local capacity. For remote capacity, the controller serializes decisions and
+counts every non-terminal `AcceleratorLease`, including a newly created Lease
+whose status has not yet been initialized.
 
-See [docs/design.md](docs/design.md) for interface and failure semantics and
-`config/samples` for API examples.
+Lease creation is retry-safe: each Lease records the Workload generation used
+for selection, and a reconciliation retry restores its decision from the
+existing immutable Lease instead of selecting a different target under the
+same allocation name.
+
+See [docs/design.md](docs/design.md),
+[docs/cricket-integration.md](docs/cricket-integration.md), and
+`config/samples`.

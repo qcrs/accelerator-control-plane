@@ -11,9 +11,8 @@ import (
 	"github.com/qcrs/accelerator-control-plane/internal/injector"
 	"github.com/qcrs/accelerator-control-plane/internal/inventory"
 	"github.com/qcrs/accelerator-control-plane/internal/policy"
+	"github.com/qcrs/accelerator-control-plane/internal/provider/cricket"
 	localprovider "github.com/qcrs/accelerator-control-plane/internal/provider/local"
-	"github.com/qcrs/accelerator-control-plane/internal/provider/lupine"
-	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -39,7 +38,6 @@ func main() {
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(corev1.AddToScheme(scheme))
-	utilruntime.Must(coordinationv1.AddToScheme(scheme))
 	utilruntime.Must(acceleratorv1alpha1.AddToScheme(scheme))
 
 	manager, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
@@ -53,20 +51,20 @@ func main() {
 
 	registry, err := contracts.NewProviderRegistry(
 		localprovider.New(),
-		lupine.New(nil),
+		cricket.New(),
 	)
 	exitOnError(err, "create provider registry")
 	allocatorRouter := &allocation.Router{
 		Local: &allocation.LocalAllocator{},
 		Remote: &allocation.RemoteAllocator{
-			AgentClient: allocation.UnsupportedAgentClient{},
-			Resolver:    &allocation.KubernetesEndpointResolver{Client: manager.GetClient()},
+			Resolver:  &allocation.KubernetesEndpointResolver{Client: manager.GetClient()},
+			Validator: registry,
 		},
 	}
 	reconciler := &workloadcontroller.WorkloadReconciler{
 		Client:    manager.GetClient(),
 		Scheme:    manager.GetScheme(),
-		Inventory: inventory.NewKubernetesReader(manager.GetClient()),
+		Inventory: inventory.NewKubernetesReader(manager.GetClient(), registry),
 		Policy:    policy.NewLocalFirst(),
 		Allocator: allocatorRouter,
 		Providers: registry,

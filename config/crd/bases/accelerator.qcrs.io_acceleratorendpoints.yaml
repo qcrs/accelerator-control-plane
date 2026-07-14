@@ -21,9 +21,12 @@ spec:
         - name: Pool
           type: string
           jsonPath: .spec.poolRef.name
-        - name: AgentReady
+        - name: Address
           type: string
-          jsonPath: .status.conditions[?(@.type=="AgentReady")].status
+          jsonPath: .spec.address
+        - name: Ready
+          type: string
+          jsonPath: .status.conditions[?(@.type=="Ready")].status
       schema:
         openAPIV3Schema:
           type: object
@@ -37,7 +40,7 @@ spec:
               type: object
             spec:
               type: object
-              required: [poolRef]
+              required: [poolRef, address, runtime, devices]
               properties:
                 poolRef:
                   type: object
@@ -46,40 +49,24 @@ spec:
                     name:
                       type: string
                       minLength: 1
-                unschedulable:
-                  type: boolean
-            status:
-              type: object
-              properties:
-                observedGeneration:
-                  type: integer
-                  format: int64
-                agentID:
+                address:
                   type: string
-                controlAddress:
-                  type: string
+                  minLength: 1
+                  maxLength: 255
                 runtime:
                   type: object
+                  required: [driver]
                   properties:
                     driver:
                       type: string
+                      minLength: 1
                     version:
                       type: string
                     apiVersion:
                       type: string
-                heartbeatLeaseRef:
-                  type: object
-                  required: [namespace, name]
-                  properties:
-                    namespace:
-                      type: string
-                    name:
-                      type: string
-                lastInventoryTime:
-                  type: string
-                  format: date-time
                 devices:
                   type: array
+                  minItems: 1
                   x-kubernetes-list-type: map
                   x-kubernetes-list-map-keys: [id]
                   items:
@@ -107,6 +94,21 @@ spec:
                         type: object
                         additionalProperties:
                           type: string
+                parameters:
+                  type: object
+                  additionalProperties:
+                    type: string
+                unschedulable:
+                  type: boolean
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                  format: int64
+                lastProbeTime:
+                  type: string
+                  format: date-time
                 conditions:
                   type: array
                   x-kubernetes-list-type: map

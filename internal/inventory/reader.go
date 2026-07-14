@@ -6,11 +6,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	acceleratorv1alpha1 "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
 	"github.com/qcrs/accelerator-control-plane/internal/contracts"
-	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -19,17 +17,20 @@ import (
 )
 
 type KubernetesReader struct {
-	Client client.Reader
-	Now    func() time.Time
+	Client    client.Reader
+	Validator contracts.RemoteEndpointValidator
 }
 
-func NewKubernetesReader(reader client.Reader) *KubernetesReader {
-	return &KubernetesReader{Client: reader, Now: time.Now}
+func NewKubernetesReader(reader client.Reader, validator contracts.RemoteEndpointValidator) *KubernetesReader {
+	return &KubernetesReader{Client: reader, Validator: validator}
 }
 
 func (r *KubernetesReader) ListCandidates(ctx context.Context, request contracts.SelectionRequest) ([]contracts.Candidate, error) {
 	if r.Client == nil {
 		return nil, contracts.NewError(contracts.ErrorKindInvalid, "read inventory", "Kubernetes client is nil")
+	}
+	if r.Validator == nil {
+		return nil, contracts.NewError(contracts.ErrorKindInvalid, "read inventory", "remote endpoint validator is nil")
 	}
 
 	var pools acceleratorv1alpha1.AcceleratorPoolList
@@ -38,28 +39,26 @@ func (r *KubernetesReader) ListCandidates(ctx context.Context, request contracts
 	var pods corev1.PodList
 	var endpoints acceleratorv1alpha1.AcceleratorEndpointList
 	var leases acceleratorv1alpha1.AcceleratorLeaseList
-	var heartbeatLeases coordinationv1.LeaseList
 
-	objects := []client.ObjectList{&pools, &providers, &nodes, &pods, &endpoints, &leases, &heartbeatLeases}
+	objects := []client.ObjectList{&pools, &providers, &nodes, &pods, &endpoints, &leases}
 	for _, object := range objects {
 		if err := r.Client.List(ctx, object); err != nil {
 			return nil, contracts.WrapError(contracts.ErrorKindTransient, "read inventory", fmt.Sprintf("list %T", object), err)
 		}
 	}
 
-	providerKinds := make(map[string]map[acceleratorv1alpha1.DeviceKind]struct{}, len(providers.Items))
+	type providerProfile struct {
+		driver string
+		kinds  map[acceleratorv1alpha1.DeviceKind]struct{}
+	}
+	providerProfiles := make(map[string]providerProfile, len(providers.Items))
 	for index := range providers.Items {
 		provider := &providers.Items[index]
 		kinds := make(map[acceleratorv1alpha1.DeviceKind]struct{}, len(provider.Spec.DeviceKinds))
 		for _, kind := range provider.Spec.DeviceKinds {
 			kinds[kind] = struct{}{}
 		}
-		providerKinds[provider.Name] = kinds
-	}
-	heartbeats := make(map[string]*coordinationv1.Lease, len(heartbeatLeases.Items))
-	for index := range heartbeatLeases.Items {
-		lease := &heartbeatLeases.Items[index]
-		heartbeats[lease.Namespace+"/"+lease.Name] = lease
+		providerProfiles[provider.Name] = providerProfile{driver: provider.Spec.Driver, kinds: kinds}
 	}
 
 	poolSelector := labels.Everything()
@@ -71,7 +70,7 @@ func (r *KubernetesReader) ListCandidates(ctx context.Context, request contracts
 		poolSelector = selector
 	}
 
-	occupied := OccupiedRemoteDevices(leases.Items)
+	occupied := OccupiedRemoteCapacity(leases.Items)
 	candidates := make([]contracts.Candidate, 0, len(nodes.Items)+len(endpoints.Items))
 	for index := range pools.Items {
 		pool := &pools.Items[index]
@@ -79,11 +78,11 @@ func (r *KubernetesReader) ListCandidates(ctx context.Context, request contracts
 			!poolSelector.Matches(labels.Set(pool.Labels)) {
 			continue
 		}
-		kinds, exists := providerKinds[pool.Spec.ProviderRef.Name]
+		profile, exists := providerProfiles[pool.Spec.ProviderRef.Name]
 		if !exists {
 			continue
 		}
-		if _, supported := kinds[pool.Spec.DeviceType]; !supported {
+		if _, supported := profile.kinds[pool.Spec.DeviceType]; !supported {
 			continue
 		}
 
@@ -91,17 +90,10 @@ func (r *KubernetesReader) ListCandidates(ctx context.Context, request contracts
 		case acceleratorv1alpha1.ExecutionModeLocal:
 			candidates = append(candidates, localCandidates(pool, &request.PodTemplate.Spec, nodes.Items, pods.Items, leases.Items)...)
 		case acceleratorv1alpha1.ExecutionModeRemote:
-			candidates = append(candidates, remoteCandidates(pool, endpoints.Items, heartbeats, occupied, r.now())...)
+			candidates = append(candidates, remoteCandidates(pool, profile.driver, endpoints.Items, occupied, r.Validator)...)
 		}
 	}
 	return candidates, nil
-}
-
-func (r *KubernetesReader) now() time.Time {
-	if r.Now == nil {
-		return time.Now()
-	}
-	return r.Now()
 }
 
 func localCandidates(
@@ -154,10 +146,10 @@ func localCandidates(
 
 func remoteCandidates(
 	pool *acceleratorv1alpha1.AcceleratorPool,
+	providerDriver string,
 	endpoints []acceleratorv1alpha1.AcceleratorEndpoint,
-	heartbeats map[string]*coordinationv1.Lease,
-	occupied map[string]map[string]struct{},
-	now time.Time,
+	occupied RemoteOccupancy,
+	validator contracts.RemoteEndpointValidator,
 ) []contracts.Candidate {
 	if pool.Spec.Remote == nil {
 		return nil
@@ -167,19 +159,34 @@ func remoteCandidates(
 		return nil
 	}
 	result := make([]contracts.Candidate, 0, len(endpoints))
+	exclusive := pool.Spec.Remote.AllocationMode != acceleratorv1alpha1.RemoteAllocationModeDevice
 	for index := range endpoints {
 		endpoint := &endpoints[index]
 		if endpoint.Spec.PoolRef.Name != pool.Name || endpoint.Spec.Unschedulable ||
 			!selector.Matches(labels.Set(endpoint.Labels)) {
 			continue
 		}
-		ready, reason := endpointReady(endpoint, heartbeats, now)
-		freeDevices := make([]contracts.Device, 0, len(endpoint.Status.Devices))
-		for _, device := range endpoint.Status.Devices {
+		ready, reason := endpointReady(endpoint, providerDriver)
+		if ready && validator != nil {
+			if err := validator.ValidateEndpoint(remoteEndpoint(endpoint)); err != nil {
+				ready = false
+				reason = err.Error()
+			}
+		}
+		if _, endpointInUse := occupied.Endpoints[endpoint.Name]; endpointInUse {
+			ready = false
+			reason = "endpoint is exclusively reserved"
+		}
+		if exclusive && len(occupied.Devices[endpoint.Name]) > 0 {
+			ready = false
+			reason = "endpoint has device reservations and cannot be reserved exclusively"
+		}
+		freeDevices := make([]contracts.Device, 0, len(endpoint.Spec.Devices))
+		for _, device := range endpoint.Spec.Devices {
 			if device.Health != acceleratorv1alpha1.DeviceHealthHealthy {
 				continue
 			}
-			if _, inUse := occupied[endpoint.Name][device.ID]; inUse {
+			if _, inUse := occupied.Devices[endpoint.Name][device.ID]; inUse {
 				continue
 			}
 			freeDevices = append(freeDevices, contracts.Device{
@@ -199,7 +206,7 @@ func remoteCandidates(
 			Mode:           acceleratorv1alpha1.ExecutionModeRemote,
 			DeviceType:     pool.Spec.DeviceType,
 			EndpointName:   endpoint.Name,
-			ControlAddress: endpoint.Status.ControlAddress,
+			Exclusive:      exclusive,
 			Labels:         mergeLabels(pool.Labels, endpoint.Labels),
 			Available:      int32(len(freeDevices)),
 			Devices:        freeDevices,
@@ -210,31 +217,33 @@ func remoteCandidates(
 	return result
 }
 
+func remoteEndpoint(endpoint *acceleratorv1alpha1.AcceleratorEndpoint) contracts.RemoteEndpoint {
+	return contracts.RemoteEndpoint{
+		Name:          endpoint.Name,
+		PoolName:      endpoint.Spec.PoolRef.Name,
+		Address:       endpoint.Spec.Address,
+		Runtime:       endpoint.Spec.Runtime,
+		Devices:       endpoint.Spec.Devices,
+		Parameters:    endpoint.Spec.Parameters,
+		Unschedulable: endpoint.Spec.Unschedulable,
+	}
+}
+
 func endpointReady(
 	endpoint *acceleratorv1alpha1.AcceleratorEndpoint,
-	heartbeats map[string]*coordinationv1.Lease,
-	now time.Time,
+	providerDriver string,
 ) (bool, string) {
-	if !conditionTrue(endpoint.Status.Conditions, "AgentReady") {
-		return false, "AgentReady is not true"
+	if endpoint.Spec.Address == "" {
+		return false, "runtime address is empty"
 	}
-	if !conditionTrue(endpoint.Status.Conditions, "InventoryReady") {
-		return false, "InventoryReady is not true"
+	if endpoint.Spec.Runtime.Driver == "" || endpoint.Spec.Runtime.Driver != providerDriver {
+		return false, fmt.Sprintf("runtime driver %q does not match provider driver %q", endpoint.Spec.Runtime.Driver, providerDriver)
 	}
-	if endpoint.Status.HeartbeatLeaseRef == nil {
-		return false, "heartbeat Lease is not reported"
+	if len(endpoint.Spec.Devices) == 0 {
+		return false, "no devices are declared"
 	}
-	key := endpoint.Status.HeartbeatLeaseRef.Namespace + "/" + endpoint.Status.HeartbeatLeaseRef.Name
-	heartbeat := heartbeats[key]
-	if heartbeat == nil || heartbeat.Spec.RenewTime == nil || heartbeat.Spec.LeaseDurationSeconds == nil {
-		return false, "heartbeat Lease is incomplete"
-	}
-	expiresAt := heartbeat.Spec.RenewTime.Add(time.Duration(*heartbeat.Spec.LeaseDurationSeconds) * time.Second)
-	if !now.Before(expiresAt) {
-		return false, "heartbeat Lease expired"
-	}
-	if endpoint.Status.ControlAddress == "" {
-		return false, "Agent control address is empty"
+	if condition := findCondition(endpoint.Status.Conditions, "Ready"); condition != nil && condition.Status != metav1.ConditionTrue {
+		return false, fmt.Sprintf("Ready condition is %s: %s", condition.Status, condition.Message)
 	}
 	return true, ""
 }
@@ -352,13 +361,13 @@ func stringIn(value string, values []string) bool {
 	return false
 }
 
-func conditionTrue(conditions []metav1.Condition, conditionType string) bool {
-	for _, condition := range conditions {
-		if condition.Type == conditionType {
-			return condition.Status == metav1.ConditionTrue
+func findCondition(conditions []metav1.Condition, conditionType string) *metav1.Condition {
+	for index := range conditions {
+		if conditions[index].Type == conditionType {
+			return &conditions[index]
 		}
 	}
-	return false
+	return nil
 }
 
 func quantityLabel(values map[string]string, key string) resource.Quantity {

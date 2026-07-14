@@ -1,0 +1,82 @@
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorProvider
+metadata:
+  name: remote-cricket
+spec:
+  driver: cricket
+  deviceKinds: [GPU]
+  clientRuntime:
+    # Build this image from the pinned Cricket source documented in
+    # docs/cricket-integration.md. It must contain the complete build/bin tree.
+    image: registry.example.com/accelerator/cricket-client:5d55bd5
+    sourcePath: /opt/cricket/bin
+    mountPath: /opt/accelerator/cricket
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorPool
+metadata:
+  name: remote-cricket
+  labels:
+    accelerator.qcrs.io/tier: remote
+spec:
+  providerRef:
+    name: remote-cricket
+  location: Remote
+  deviceType: GPU
+  priority: 10
+  remote:
+    allocationMode: ExclusiveEndpoint
+    endpointSelector:
+      matchLabels:
+        accelerator.qcrs.io/runtime: cricket
+---
+# One endpoint represents one already-running cricket-rpc-server. The declared
+# devices must match the server process CUDA_VISIBLE_DEVICES setting.
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorEndpoint
+metadata:
+  name: cricket-gpu-a
+  labels:
+    accelerator.qcrs.io/runtime: cricket
+spec:
+  poolRef:
+    name: remote-cricket
+  address: 10.0.0.25
+  runtime:
+    driver: cricket
+    version: 5d55bd582fc7acbb2a12c45f104020566a67218a
+    apiVersion: "1"
+  parameters:
+    rpcID: "1"
+  devices:
+    - id: gpu-0
+      uuid: GPU-REPLACE-ME
+      vendor: nvidia
+      model: A100
+      memory: 40Gi
+      health: Healthy
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorWorkload
+metadata:
+  name: remote-cricket-example
+  namespace: default
+spec:
+  accelerator:
+    deviceType: GPU
+    vendor: nvidia
+    count: 1
+    containerName: worker
+  placement:
+    mode: RemoteOnly
+    reservationTTL: 5m
+  podTemplate:
+    metadata:
+      labels:
+        app: remote-cricket-example
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: registry.example.com/workloads/cuda-dynamic-client:latest
+          command: ["/opt/workload/run"]

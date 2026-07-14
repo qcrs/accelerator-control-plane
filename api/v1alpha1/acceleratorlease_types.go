@@ -21,6 +21,12 @@ const (
 type AcceleratorLeaseSpec struct {
 	Owner corev1.ObjectReference `json:"owner"`
 
+	// WorkloadGeneration pins the exact Workload spec version that was used
+	// for selection. It prevents a retry from attaching an old Lease to a
+	// Workload whose spec changed before status was persisted.
+	// +kubebuilder:validation:Minimum=1
+	WorkloadGeneration int64 `json:"workloadGeneration"`
+
 	Request AcceleratorRequest `json:"request"`
 
 	ProviderRef ClusterObjectReference `json:"providerRef"`

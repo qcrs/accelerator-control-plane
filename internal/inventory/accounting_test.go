@@ -53,7 +53,7 @@ func TestLocalAccountingAvoidsBoundLeaseDoubleCount(t *testing.T) {
 	}
 }
 
-func TestOccupiedRemoteDevicesIgnoresReleasedLease(t *testing.T) {
+func TestOccupiedRemoteCapacityTracksExclusiveAndDeviceLeases(t *testing.T) {
 	leases := []acceleratorv1alpha1.AcceleratorLease{
 		{
 			Spec: acceleratorv1alpha1.AcceleratorLeaseSpec{
@@ -65,17 +65,41 @@ func TestOccupiedRemoteDevicesIgnoresReleasedLease(t *testing.T) {
 		{
 			Spec: acceleratorv1alpha1.AcceleratorLeaseSpec{
 				Mode:    acceleratorv1alpha1.ExecutionModeRemote,
-				Targets: []acceleratorv1alpha1.AllocationTarget{{EndpointName: "a", DeviceIDs: []string{"gpu-1"}}},
+				Targets: []acceleratorv1alpha1.AllocationTarget{{EndpointName: "b", DeviceIDs: []string{"gpu-1"}, Exclusive: true}},
+			},
+			Status: acceleratorv1alpha1.AcceleratorLeaseStatus{Phase: acceleratorv1alpha1.AllocationPhasePending},
+		},
+		{
+			Spec: acceleratorv1alpha1.AcceleratorLeaseSpec{
+				Mode:    acceleratorv1alpha1.ExecutionModeRemote,
+				Targets: []acceleratorv1alpha1.AllocationTarget{{EndpointName: "c", DeviceIDs: []string{"gpu-2"}}},
 			},
 			Status: acceleratorv1alpha1.AcceleratorLeaseStatus{Phase: acceleratorv1alpha1.AllocationPhaseReleased},
 		},
 	}
-	occupied := OccupiedRemoteDevices(leases)
-	if _, exists := occupied["a"]["gpu-0"]; !exists {
+	occupied := OccupiedRemoteCapacity(leases)
+	if _, exists := occupied.Devices["a"]["gpu-0"]; !exists {
 		t.Fatal("bound device was not marked occupied")
 	}
-	if _, exists := occupied["a"]["gpu-1"]; exists {
+	if _, exists := occupied.Endpoints["b"]; !exists {
+		t.Fatal("exclusive endpoint was not marked occupied")
+	}
+	if _, exists := occupied.Devices["c"]["gpu-2"]; exists {
 		t.Fatal("released device remained occupied")
+	}
+}
+
+func TestNewLeaseConsumesCapacityBeforeStatusInitialization(t *testing.T) {
+	lease := acceleratorv1alpha1.AcceleratorLease{
+		Spec: acceleratorv1alpha1.AcceleratorLeaseSpec{
+			Mode: acceleratorv1alpha1.ExecutionModeRemote,
+			Targets: []acceleratorv1alpha1.AllocationTarget{{
+				EndpointName: "a", DeviceIDs: []string{"gpu-0"}, Exclusive: true,
+			}},
+		},
+	}
+	if _, exists := OccupiedRemoteCapacity([]acceleratorv1alpha1.AcceleratorLease{lease}).Endpoints["a"]; !exists {
+		t.Fatal("new lease must reserve capacity before its status is initialized")
 	}
 }
 

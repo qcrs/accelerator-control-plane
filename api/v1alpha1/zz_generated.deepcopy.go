@@ -114,20 +114,18 @@ func (in *AcceleratorPoolList) DeepCopyObject() runtime.Object { return in.DeepC
 func (in *AcceleratorEndpoint) DeepCopyInto(out *AcceleratorEndpoint) {
 	*out = *in
 	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
-	if in.Status.HeartbeatLeaseRef != nil {
-		out.Status.HeartbeatLeaseRef = new(HeartbeatLeaseReference)
-		*out.Status.HeartbeatLeaseRef = *in.Status.HeartbeatLeaseRef
-	}
-	if in.Status.LastInventoryTime != nil {
-		out.Status.LastInventoryTime = in.Status.LastInventoryTime.DeepCopy()
-	}
-	if in.Status.Devices != nil {
-		out.Status.Devices = make([]DeviceInfo, len(in.Status.Devices))
-		for i := range in.Status.Devices {
-			out.Status.Devices[i] = in.Status.Devices[i]
-			out.Status.Devices[i].Memory = in.Status.Devices[i].Memory.DeepCopy()
-			out.Status.Devices[i].Attributes = copyStringMap(in.Status.Devices[i].Attributes)
+	out.Spec = in.Spec
+	if in.Spec.Devices != nil {
+		out.Spec.Devices = make([]DeviceInfo, len(in.Spec.Devices))
+		for i := range in.Spec.Devices {
+			out.Spec.Devices[i] = in.Spec.Devices[i]
+			out.Spec.Devices[i].Memory = in.Spec.Devices[i].Memory.DeepCopy()
+			out.Spec.Devices[i].Attributes = copyStringMap(in.Spec.Devices[i].Attributes)
 		}
+	}
+	out.Spec.Parameters = copyStringMap(in.Spec.Parameters)
+	if in.Status.LastProbeTime != nil {
+		out.Status.LastProbeTime = in.Status.LastProbeTime.DeepCopy()
 	}
 	copyConditions(in.Status.Conditions, &out.Status.Conditions)
 }
@@ -221,9 +219,7 @@ func (in *AcceleratorLease) DeepCopyInto(out *AcceleratorLease) {
 	out.Spec = in.Spec
 	copyAcceleratorRequest(in.Spec.Request, &out.Spec.Request)
 	copyAllocationTargets(in.Spec.Targets, &out.Spec.Targets)
-	if in.Status.Binding.Endpoints != nil {
-		out.Status.Binding.Endpoints = append([]string(nil), in.Status.Binding.Endpoints...)
-	}
+	copyBoundEndpoints(in.Status.Binding.Endpoints, &out.Status.Binding.Endpoints)
 	if in.Status.ExpiresAt != nil {
 		out.Status.ExpiresAt = in.Status.ExpiresAt.DeepCopy()
 	}
@@ -295,6 +291,18 @@ func copyAllocationTargets(in []AllocationTarget, out *[]AllocationTarget) {
 	for i := range in {
 		(*out)[i] = in[i]
 		(*out)[i].DeviceIDs = append([]string(nil), in[i].DeviceIDs...)
+	}
+}
+
+func copyBoundEndpoints(in []BoundEndpoint, out *[]BoundEndpoint) {
+	if in == nil {
+		*out = nil
+		return
+	}
+	*out = make([]BoundEndpoint, len(in))
+	for i := range in {
+		(*out)[i] = in[i]
+		(*out)[i].Parameters = copyStringMap(in[i].Parameters)
 	}
 }
 

@@ -140,17 +140,32 @@ func mergeEnv(values *[]corev1.EnvVar, desired corev1.EnvVar) error {
 		if reflect.DeepEqual(*existing, desired) {
 			return nil
 		}
-		if desired.Name == "LD_LIBRARY_PATH" && existing.ValueFrom == nil && desired.ValueFrom == nil {
-			prefix := strings.TrimSuffix(desired.Value, ":")
-			if existing.Value == prefix || strings.HasPrefix(existing.Value, prefix+":") {
-				return nil
-			}
-			existing.Value = prefix + ":" + existing.Value
-			return nil
+		if (desired.Name == "LD_LIBRARY_PATH" || desired.Name == "LD_PRELOAD") && existing.ValueFrom == nil && desired.ValueFrom == nil {
+			return prependPathLikeValue(existing, desired.Value)
 		}
 		return conflict("environment variable", desired.Name)
 	}
 	*values = append(*values, desired)
+	return nil
+}
+
+func prependPathLikeValue(existing *corev1.EnvVar, prefix string) error {
+	prefix = strings.Trim(prefix, ": ")
+	if prefix == "" {
+		return contracts.NewError(contracts.ErrorKindInvalid, "mutate pod", fmt.Sprintf("managed %s value is empty", existing.Name))
+	}
+	for _, value := range strings.FieldsFunc(existing.Value, func(character rune) bool {
+		return character == ':' || character == ' ' || character == '\t'
+	}) {
+		if value == prefix {
+			return nil
+		}
+	}
+	if existing.Value == "" {
+		existing.Value = prefix
+	} else {
+		existing.Value = prefix + ":" + existing.Value
+	}
 	return nil
 }
 

@@ -14,14 +14,14 @@ rules:
       - acceleratorproviders
       - acceleratorpools
       - acceleratorendpoints
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["accelerator.qcrs.io"]
+    resources:
       - acceleratorworkloads
       - acceleratorleases
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["accelerator.qcrs.io"]
     resources:
-      - acceleratorproviders/status
-      - acceleratorpools/status
-      - acceleratorendpoints/status
       - acceleratorworkloads/status
       - acceleratorleases/status
     verbs: ["get", "update", "patch"]
@@ -36,9 +36,6 @@ rules:
   - apiGroups: [""]
     resources: ["pods"]
     verbs: ["create", "update", "patch", "delete"]
-  - apiGroups: ["coordination.k8s.io"]
-    resources: ["leases"]
-    verbs: ["get", "list", "watch", "create", "update", "patch"]
   - apiGroups: [""]
     resources: ["events"]
     verbs: ["create", "patch"]

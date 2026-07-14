@@ -86,6 +86,10 @@ spec:
                     endpointSelector:
                       type: object
                       x-kubernetes-preserve-unknown-fields: true
+                    allocationMode:
+                      type: string
+                      default: ExclusiveEndpoint
+                      enum: [ExclusiveEndpoint, Device]
             status:
               type: object
               properties:

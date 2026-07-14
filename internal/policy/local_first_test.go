@@ -53,6 +53,15 @@ func TestLocalFirstSelect(t *testing.T) {
 			wantTargets: 1,
 		},
 		{
+			name:    "exclusive remote endpoints are never aggregated",
+			request: gpuRequest(2),
+			candidates: []contracts.Candidate{
+				exclusiveRemoteCandidate("remote", "endpoint-a", 10, device("gpu-a", "24Gi")),
+				exclusiveRemoteCandidate("remote", "endpoint-b", 10, device("gpu-b", "24Gi")),
+			},
+			wantErrorKind: contracts.ErrorKindUnschedulable,
+		},
+		{
 			name: "local memory must be known and sufficient",
 			request: contracts.SelectionRequest{
 				Accelerator: acceleratorv1alpha1.AcceleratorRequest{
@@ -172,6 +181,12 @@ func remoteCandidate(pool, endpoint string, priority int32, devices ...contracts
 		Devices:      devices,
 		Ready:        true,
 	}
+}
+
+func exclusiveRemoteCandidate(pool, endpoint string, priority int32, devices ...contracts.Device) contracts.Candidate {
+	candidate := remoteCandidate(pool, endpoint, priority, devices...)
+	candidate.Exclusive = true
+	return candidate
 }
 
 func device(id, memory string) contracts.Device {

@@ -10,81 +10,107 @@ import (
 	"github.com/qcrs/accelerator-control-plane/internal/contracts"
 )
 
-type fakeResolver map[string]string
+type fakeResolver map[string]contracts.RemoteEndpoint
 
-func (r fakeResolver) ControlAddress(_ context.Context, endpointName string) (string, error) {
-	address, exists := r[endpointName]
+type fakeEndpointValidator func(contracts.RemoteEndpoint) error
+
+func (r fakeResolver) Resolve(_ context.Context, endpointName string) (contracts.RemoteEndpoint, error) {
+	endpoint, exists := r[endpointName]
 	if !exists {
-		return "", errors.New("not found")
+		return contracts.RemoteEndpoint{}, errors.New("not found")
 	}
-	return address, nil
+	return endpoint, nil
 }
 
-type fakeAgentClient struct {
-	reserveCalls  int
-	releaseCalls  int
-	failReserveAt int
-	failRelease   bool
+func (validate fakeEndpointValidator) ValidateEndpoint(endpoint contracts.RemoteEndpoint) error {
+	return validate(endpoint)
 }
 
-func (f *fakeAgentClient) Reserve(_ context.Context, address string, request contracts.AgentReservationRequest) (contracts.AgentReservation, error) {
-	f.reserveCalls++
-	if f.reserveCalls == f.failReserveAt {
-		return contracts.AgentReservation{}, contracts.NewError(contracts.ErrorKindConflict, "reserve", "capacity changed")
-	}
-	return contracts.AgentReservation{
-		BindingID: request.LeaseKey,
-		Endpoints: []string{"https://" + address},
-	}, nil
-}
-
-func (f *fakeAgentClient) Release(_ context.Context, _, _ string) error {
-	f.releaseCalls++
-	if f.failRelease {
-		return errors.New("release failed")
-	}
-	return nil
-}
-
-func TestRemoteAllocatorRollsBackPreparedTargets(t *testing.T) {
-	client := &fakeAgentClient{failReserveAt: 2}
+func TestRemoteAllocatorSnapshotsResolvedEndpoint(t *testing.T) {
+	now := time.Unix(100, 0)
 	allocator := &RemoteAllocator{
-		AgentClient: client,
-		Resolver:    fakeResolver{"a": "agent-a", "b": "agent-b"},
-		Now:         func() time.Time { return time.Unix(0, 0) },
+		Resolver: fakeResolver{"a": {
+			Name:       "a",
+			PoolName:   "remote",
+			Address:    "gpu-a.example:43123",
+			Runtime:    acceleratorv1alpha1.RuntimeInfo{Driver: "cricket"},
+			Parameters: map[string]string{"rpcID": "7"},
+			Devices: []acceleratorv1alpha1.DeviceInfo{{
+				ID: "gpu-0", Health: acceleratorv1alpha1.DeviceHealthHealthy,
+			}},
+		}},
+		Validator: fakeEndpointValidator(func(contracts.RemoteEndpoint) error { return nil }),
+		Now:       func() time.Time { return now },
 	}
-	_, err := allocator.Reserve(context.Background(), contracts.ReservationRequest{
+	reservation, err := allocator.Reserve(context.Background(), contracts.ReservationRequest{
 		LeaseKey: "lease",
+		PoolName: "remote",
 		Mode:     acceleratorv1alpha1.ExecutionModeRemote,
 		TTL:      time.Minute,
-		Targets: []acceleratorv1alpha1.AllocationTarget{
-			{EndpointName: "a", DeviceIDs: []string{"gpu-0"}},
-			{EndpointName: "b", DeviceIDs: []string{"gpu-1"}},
-		},
+		Targets: []acceleratorv1alpha1.AllocationTarget{{
+			EndpointName: "a", DeviceIDs: []string{"gpu-0"}, Exclusive: true,
+		}},
 	})
-	if !contracts.IsErrorKind(err, contracts.ErrorKindConflict) {
-		t.Fatalf("expected capacity conflict, got %v", err)
+	if err != nil {
+		t.Fatalf("Reserve returned error: %v", err)
 	}
-	if client.releaseCalls != 1 {
-		t.Fatalf("expected one compensating release, got %d", client.releaseCalls)
+	if reservation.BindingID != "remote/lease" || !reservation.ExpiresAt.Equal(now.Add(time.Minute)) {
+		t.Fatalf("unexpected reservation metadata: %#v", reservation)
+	}
+	if len(reservation.Endpoints) != 1 || reservation.Endpoints[0].Address != "gpu-a.example:43123" || reservation.Endpoints[0].Runtime.Driver != "cricket" || reservation.Endpoints[0].Parameters["rpcID"] != "7" {
+		t.Fatalf("unexpected endpoint snapshot: %#v", reservation.Endpoints)
+	}
+
+	reservation.Endpoints[0].Parameters["rpcID"] = "9"
+	if allocator.Resolver.(fakeResolver)["a"].Parameters["rpcID"] != "7" {
+		t.Fatal("reservation parameters alias resolver state")
 	}
 }
 
-func TestRemoteAllocatorSurfacesRollbackFailureAsTransient(t *testing.T) {
-	client := &fakeAgentClient{failReserveAt: 2, failRelease: true}
-	allocator := &RemoteAllocator{
-		AgentClient: client,
-		Resolver:    fakeResolver{"a": "agent-a", "b": "agent-b"},
-	}
-	_, err := allocator.Reserve(context.Background(), contracts.ReservationRequest{
-		LeaseKey: "lease",
-		TTL:      time.Minute,
-		Targets: []acceleratorv1alpha1.AllocationTarget{
-			{EndpointName: "a", DeviceIDs: []string{"gpu-0"}},
-			{EndpointName: "b", DeviceIDs: []string{"gpu-1"}},
+func TestRemoteAllocatorRejectsChangedCapacity(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint contracts.RemoteEndpoint
+	}{
+		{
+			name: "unschedulable endpoint",
+			endpoint: contracts.RemoteEndpoint{
+				Name: "a", PoolName: "remote", Address: "gpu-a", Unschedulable: true,
+				Runtime: acceleratorv1alpha1.RuntimeInfo{Driver: "cricket"},
+				Devices: []acceleratorv1alpha1.DeviceInfo{{ID: "gpu-0", Health: acceleratorv1alpha1.DeviceHealthHealthy}},
+			},
 		},
-	})
-	if !contracts.IsErrorKind(err, contracts.ErrorKindTransient) {
-		t.Fatalf("expected transient cleanup error, got %v", err)
+		{
+			name: "unhealthy device",
+			endpoint: contracts.RemoteEndpoint{
+				Name: "a", PoolName: "remote", Address: "gpu-a",
+				Runtime: acceleratorv1alpha1.RuntimeInfo{Driver: "cricket"},
+				Devices: []acceleratorv1alpha1.DeviceInfo{{ID: "gpu-0", Health: acceleratorv1alpha1.DeviceHealthUnhealthy}},
+			},
+		},
+		{
+			name: "explicitly unready endpoint",
+			endpoint: contracts.RemoteEndpoint{
+				Name: "a", PoolName: "remote", Address: "gpu-a",
+				Runtime:   acceleratorv1alpha1.RuntimeInfo{Driver: "cricket"},
+				Readiness: &contracts.EndpointReadiness{Ready: false, Reason: "ProbeFailed"},
+				Devices:   []acceleratorv1alpha1.DeviceInfo{{ID: "gpu-0", Health: acceleratorv1alpha1.DeviceHealthHealthy}},
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			allocator := &RemoteAllocator{
+				Resolver:  fakeResolver{"a": test.endpoint},
+				Validator: fakeEndpointValidator(func(contracts.RemoteEndpoint) error { return nil }),
+			}
+			_, err := allocator.Reserve(context.Background(), contracts.ReservationRequest{
+				LeaseKey: "lease", PoolName: "remote", Mode: acceleratorv1alpha1.ExecutionModeRemote, TTL: time.Minute,
+				Targets: []acceleratorv1alpha1.AllocationTarget{{EndpointName: "a", DeviceIDs: []string{"gpu-0"}}},
+			})
+			if !contracts.IsErrorKind(err, contracts.ErrorKindConflict) {
+				t.Fatalf("expected capacity conflict, got %v", err)
+			}
+		})
 	}
 }

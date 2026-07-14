@@ -15,6 +15,10 @@ type LocalPoolConfig struct {
 
 type RemotePoolConfig struct {
 	EndpointSelector metav1.LabelSelector `json:"endpointSelector,omitempty"`
+
+	// +kubebuilder:default=ExclusiveEndpoint
+	// +kubebuilder:validation:Enum=ExclusiveEndpoint;Device
+	AllocationMode RemoteAllocationMode `json:"allocationMode,omitempty"`
 }
 
 // +kubebuilder:validation:XValidation:rule="self.location == 'Local' ? has(self.local) && !has(self.remote) : has(self.remote) && !has(self.local)",message="exactly one location-specific configuration must be set"

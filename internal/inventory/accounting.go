@@ -52,8 +52,16 @@ func ReservedOnNode(
 	return reserved
 }
 
-func OccupiedRemoteDevices(leases []acceleratorv1alpha1.AcceleratorLease) map[string]map[string]struct{} {
-	occupied := map[string]map[string]struct{}{}
+type RemoteOccupancy struct {
+	Endpoints map[string]struct{}
+	Devices   map[string]map[string]struct{}
+}
+
+func OccupiedRemoteCapacity(leases []acceleratorv1alpha1.AcceleratorLease) RemoteOccupancy {
+	occupied := RemoteOccupancy{
+		Endpoints: map[string]struct{}{},
+		Devices:   map[string]map[string]struct{}{},
+	}
 	for index := range leases {
 		lease := &leases[index]
 		if !leaseConsumesCapacity(lease) || lease.Spec.Mode != acceleratorv1alpha1.ExecutionModeRemote {
@@ -63,10 +71,14 @@ func OccupiedRemoteDevices(leases []acceleratorv1alpha1.AcceleratorLease) map[st
 			if target.EndpointName == "" {
 				continue
 			}
-			devices := occupied[target.EndpointName]
+			if target.Exclusive {
+				occupied.Endpoints[target.EndpointName] = struct{}{}
+				continue
+			}
+			devices := occupied.Devices[target.EndpointName]
 			if devices == nil {
 				devices = map[string]struct{}{}
-				occupied[target.EndpointName] = devices
+				occupied.Devices[target.EndpointName] = devices
 			}
 			for _, deviceID := range target.DeviceIDs {
 				devices[deviceID] = struct{}{}
@@ -110,7 +122,8 @@ func containerRequest(container corev1.Container, resourceName corev1.ResourceNa
 
 func leaseConsumesCapacity(lease *acceleratorv1alpha1.AcceleratorLease) bool {
 	switch lease.Status.Phase {
-	case acceleratorv1alpha1.AllocationPhasePending,
+	case "",
+		acceleratorv1alpha1.AllocationPhasePending,
 		acceleratorv1alpha1.AllocationPhaseReserved,
 		acceleratorv1alpha1.AllocationPhaseBound,
 		acceleratorv1alpha1.AllocationPhaseReleasing:

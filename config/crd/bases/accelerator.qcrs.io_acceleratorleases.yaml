@@ -43,7 +43,7 @@ spec:
               type: object
             spec:
               type: object
-              required: [owner, request, providerRef, poolRef, mode, targets, ttl]
+              required: [owner, workloadGeneration, request, providerRef, poolRef, mode, targets, ttl]
               x-kubernetes-validations:
                 - rule: self == oldSelf
                   message: spec is immutable
@@ -51,6 +51,10 @@ spec:
                 owner:
                   type: object
                   x-kubernetes-preserve-unknown-fields: true
+                workloadGeneration:
+                  type: integer
+                  format: int64
+                  minimum: 1
                 request:
                   type: object
                   required: [deviceType, count]
@@ -109,6 +113,8 @@ spec:
                         type: array
                         items:
                           type: string
+                      exclusive:
+                        type: boolean
                       count:
                         type: integer
                         format: int32
@@ -130,8 +136,34 @@ spec:
                       type: string
                     endpoints:
                       type: array
+                      x-kubernetes-list-type: map
+                      x-kubernetes-list-map-keys: [name]
                       items:
-                        type: string
+                        type: object
+                        required: [name, address, runtime]
+                        properties:
+                          name:
+                            type: string
+                            minLength: 1
+                          address:
+                            type: string
+                            minLength: 1
+                            maxLength: 255
+                          runtime:
+                            type: object
+                            required: [driver]
+                            properties:
+                              driver:
+                                type: string
+                                minLength: 1
+                              version:
+                                type: string
+                              apiVersion:
+                                type: string
+                          parameters:
+                            type: object
+                            additionalProperties:
+                              type: string
                 expiresAt:
                   type: string
                   format: date-time

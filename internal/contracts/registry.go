@@ -55,3 +55,18 @@ func (r *ProviderRegistry) Drivers() []string {
 	sort.Strings(drivers)
 	return drivers
 }
+
+// ValidateEndpoint dispatches endpoint validation to the Provider named by
+// the endpoint runtime driver. Endpoint validation is optional for Providers
+// that do not manage remote runtimes.
+func (r *ProviderRegistry) ValidateEndpoint(endpoint RemoteEndpoint) error {
+	provider, err := r.Get(endpoint.Runtime.Driver)
+	if err != nil {
+		return err
+	}
+	validator, supported := provider.(RemoteEndpointValidator)
+	if !supported {
+		return nil
+	}
+	return validator.ValidateEndpoint(endpoint)
+}

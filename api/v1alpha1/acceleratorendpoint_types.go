@@ -14,12 +14,14 @@ const (
 )
 
 type RuntimeInfo struct {
-	Driver     string `json:"driver,omitempty"`
+	// +kubebuilder:validation:MinLength=1
+	Driver     string `json:"driver"`
 	Version    string `json:"version,omitempty"`
 	APIVersion string `json:"apiVersion,omitempty"`
 }
 
 type DeviceInfo struct {
+	// +kubebuilder:validation:MinLength=1
 	ID     string `json:"id"`
 	UUID   string `json:"uuid,omitempty"`
 	Vendor string `json:"vendor,omitempty"`
@@ -36,21 +38,32 @@ type DeviceInfo struct {
 type AcceleratorEndpointSpec struct {
 	PoolRef ClusterObjectReference `json:"poolRef"`
 
+	// Address is the provider-specific remote runtime address. It is copied
+	// into each allocation binding so later edits do not retarget running Pods.
+	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=255
+	Address string `json:"address"`
+
+	Runtime RuntimeInfo `json:"runtime"`
+
+	// Devices is the capacity exposed by this runtime endpoint. For a static
+	// Cricket deployment it must match CUDA_VISIBLE_DEVICES on the server.
+	// +kubebuilder:validation:MinItems=1
+	// +listType=map
+	// +listMapKey=id
+	Devices []DeviceInfo `json:"devices"`
+
+	// Parameters contains non-secret provider-specific connection values.
+	Parameters map[string]string `json:"parameters,omitempty"`
+
 	Unschedulable bool `json:"unschedulable,omitempty"`
 }
 
 type AcceleratorEndpointStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	AgentID        string `json:"agentID,omitempty"`
-	ControlAddress string `json:"controlAddress,omitempty"`
+	LastProbeTime *metav1.Time `json:"lastProbeTime,omitempty"`
 
-	Runtime RuntimeInfo `json:"runtime,omitempty"`
-
-	HeartbeatLeaseRef *HeartbeatLeaseReference `json:"heartbeatLeaseRef,omitempty"`
-	LastInventoryTime *metav1.Time             `json:"lastInventoryTime,omitempty"`
-
-	Devices    []DeviceInfo       `json:"devices,omitempty"`
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
@@ -58,7 +71,8 @@ type AcceleratorEndpointStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,shortName=aendpoint
 // +kubebuilder:printcolumn:name="Pool",type=string,JSONPath=`.spec.poolRef.name`
-// +kubebuilder:printcolumn:name="AgentReady",type=string,JSONPath=`.status.conditions[?(@.type=="AgentReady")].status`
+// +kubebuilder:printcolumn:name="Address",type=string,JSONPath=`.spec.address`
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 type AcceleratorEndpoint struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

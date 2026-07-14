@@ -8,7 +8,6 @@ import (
 	acceleratorv1alpha1 "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
 	"github.com/qcrs/accelerator-control-plane/internal/allocation"
 	"github.com/qcrs/accelerator-control-plane/internal/contracts"
-	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -25,15 +24,19 @@ const (
 	WorkloadFinalizer = "accelerator.qcrs.io/workload-protection"
 	LeaseFinalizer    = "accelerator.qcrs.io/release-protection"
 
-	ConditionAccepted = "Accepted"
-	ConditionSelected = "Selected"
-	ConditionReserved = "Reserved"
-	ConditionPodReady = "PodReady"
-	ConditionDegraded = "Degraded"
+	ConditionAccepted     = "Accepted"
+	ConditionSelected     = "Selected"
+	ConditionReserved     = "Reserved"
+	ConditionRuntimeReady = "RuntimeReady"
+	ConditionPodReady     = "PodReady"
+	ConditionDegraded     = "Degraded"
 
-	defaultReservationTTL         = 5 * time.Minute
-	unschedulableRetry            = 15 * time.Second
-	defaultHeartbeatCheckInterval = 15 * time.Second
+	decisionPolicyAnnotation = "accelerator.qcrs.io/decision-policy"
+	decisionReasonAnnotation = "accelerator.qcrs.io/decision-reason"
+
+	defaultReservationTTL        = 5 * time.Minute
+	unschedulableRetry           = 15 * time.Second
+	defaultEndpointCheckInterval = 15 * time.Second
 )
 
 type WorkloadReconciler struct {
@@ -96,6 +99,9 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, request ctrl.Request
 	leaseKey := types.NamespacedName{Namespace: workload.Namespace, Name: workload.Status.AllocationRef}
 	if err := r.Get(ctx, leaseKey, lease); err != nil {
 		if apierrors.IsNotFound(err) {
+			if workloadPhaseTerminal(workload.Status.Phase) {
+				return ctrl.Result{}, nil
+			}
 			workload.Status.AllocationRef = ""
 			workload.Status.Phase = acceleratorv1alpha1.WorkloadPhasePending
 			return ctrl.Result{Requeue: true}, r.updateWorkloadStatus(ctx, workload)
@@ -103,10 +109,7 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, request ctrl.Request
 		return ctrl.Result{}, err
 	}
 	if !lease.DeletionTimestamp.IsZero() {
-		if err := r.releaseLease(ctx, lease); err != nil {
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{Requeue: true}, nil
+		return r.finalizeDeletingLease(ctx, workload, lease)
 	}
 
 	if allocation.IsExpired(lease, r.now()) {
@@ -118,6 +121,15 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, request ctrl.Request
 		if err := allocation.Transition(lease, acceleratorv1alpha1.AllocationPhasePending); err != nil {
 			return ctrl.Result{}, err
 		}
+		if lease.Spec.TTL.Duration <= 0 {
+			return ctrl.Result{}, contracts.NewError(contracts.ErrorKindInvalid, "initialize allocation lease", "lease TTL must be positive")
+		}
+		createdAt := lease.CreationTimestamp.Time
+		if createdAt.IsZero() {
+			createdAt = r.now()
+		}
+		expiresAt := metav1.NewTime(createdAt.Add(lease.Spec.TTL.Duration))
+		lease.Status.ExpiresAt = &expiresAt
 		return ctrl.Result{Requeue: true}, r.updateLeaseStatus(ctx, lease)
 	case acceleratorv1alpha1.AllocationPhasePending:
 		return r.reserveLease(ctx, workload, lease)
@@ -131,7 +143,7 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, request ctrl.Request
 		}
 		return ctrl.Result{Requeue: true}, nil
 	case acceleratorv1alpha1.AllocationPhaseReleased:
-		return r.syncTerminalStatus(ctx, workload)
+		return r.syncTerminalStatus(ctx, workload, lease)
 	case acceleratorv1alpha1.AllocationPhaseFailed, acceleratorv1alpha1.AllocationPhaseExpired:
 		workload.Status.AllocationRef = ""
 		workload.Status.Phase = acceleratorv1alpha1.WorkloadPhasePending
@@ -142,6 +154,15 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, request ctrl.Request
 }
 
 func (r *WorkloadReconciler) selectAndCreateLease(ctx context.Context, workload *acceleratorv1alpha1.AcceleratorWorkload) (ctrl.Result, error) {
+	attempt := workload.Status.AllocationAttempt + 1
+	existing := &acceleratorv1alpha1.AcceleratorLease{}
+	existingKey := types.NamespacedName{Namespace: workload.Namespace, Name: leaseName(workload.Name, attempt)}
+	if err := r.Get(ctx, existingKey, existing); err == nil {
+		return r.restoreLeaseSelection(ctx, workload, existing, attempt)
+	} else if !apierrors.IsNotFound(err) {
+		return ctrl.Result{}, err
+	}
+
 	selectionRequest := contracts.SelectionRequest{
 		Accelerator: workload.Spec.Accelerator,
 		Placement:   workload.Spec.Placement,
@@ -166,10 +187,14 @@ func (r *WorkloadReconciler) selectAndCreateLease(ctx context.Context, workload 
 		return ctrl.Result{}, err
 	}
 	if err := provider.Validate(providerObject, pool); err != nil {
+		if isPermanentConfigurationError(err) {
+			workload.Status.Phase = acceleratorv1alpha1.WorkloadPhasePending
+			setCondition(&workload.Status.Conditions, workload.Generation, ConditionSelected, metav1.ConditionFalse, "InvalidProvider", err.Error(), r.now())
+			return ctrl.Result{RequeueAfter: unschedulableRetry}, r.updateWorkloadStatus(ctx, workload)
+		}
 		return ctrl.Result{}, err
 	}
 
-	attempt := workload.Status.AllocationAttempt + 1
 	ttl := workload.Spec.Placement.ReservationTTL.Duration
 	if ttl == 0 {
 		ttl = defaultReservationTTL
@@ -179,6 +204,10 @@ func (r *WorkloadReconciler) selectAndCreateLease(ctx context.Context, workload 
 			Name:       leaseName(workload.Name, attempt),
 			Namespace:  workload.Namespace,
 			Finalizers: []string{LeaseFinalizer},
+			Annotations: map[string]string{
+				decisionPolicyAnnotation: decision.Policy,
+				decisionReasonAnnotation: decision.Reason,
+			},
 			Labels: map[string]string{
 				"accelerator.qcrs.io/workload": workload.Name,
 			},
@@ -191,43 +220,86 @@ func (r *WorkloadReconciler) selectAndCreateLease(ctx context.Context, workload 
 				Name:       workload.Name,
 				UID:        workload.UID,
 			},
-			Request:     workload.Spec.Accelerator,
-			ProviderRef: acceleratorv1alpha1.ClusterObjectReference{Name: decision.ProviderName},
-			PoolRef:     acceleratorv1alpha1.ClusterObjectReference{Name: decision.PoolName},
-			Mode:        decision.Mode,
-			Targets:     decision.Targets,
-			TTL:         metav1.Duration{Duration: ttl},
+			WorkloadGeneration: workload.Generation,
+			Request:            workload.Spec.Accelerator,
+			ProviderRef:        acceleratorv1alpha1.ClusterObjectReference{Name: decision.ProviderName},
+			PoolRef:            acceleratorv1alpha1.ClusterObjectReference{Name: decision.PoolName},
+			Mode:               decision.Mode,
+			Targets:            decision.Targets,
+			TTL:                metav1.Duration{Duration: ttl},
 		},
 	}
 	if err := controllerutil.SetControllerReference(workload, lease, r.Scheme); err != nil {
 		return ctrl.Result{}, err
 	}
-	if err := r.Create(ctx, lease); err != nil && !apierrors.IsAlreadyExists(err) {
-		return ctrl.Result{}, err
-	}
-	if lease.UID == "" {
-		if err := r.Get(ctx, client.ObjectKeyFromObject(lease), lease); err != nil {
+	if err := r.Create(ctx, lease); err != nil {
+		if !apierrors.IsAlreadyExists(err) {
 			return ctrl.Result{}, err
 		}
-		if lease.Spec.Owner.UID != workload.UID {
-			return ctrl.Result{}, fmt.Errorf("lease %s/%s is owned by a different workload", lease.Namespace, lease.Name)
+		existing = &acceleratorv1alpha1.AcceleratorLease{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(lease), existing); err != nil {
+			return ctrl.Result{}, err
 		}
+		return r.restoreLeaseSelection(ctx, workload, existing, attempt)
+	}
+	return r.recordLeaseSelection(ctx, workload, lease, attempt, decision.Policy, decision.Reason, r.now())
+}
+
+func (r *WorkloadReconciler) restoreLeaseSelection(
+	ctx context.Context,
+	workload *acceleratorv1alpha1.AcceleratorWorkload,
+	lease *acceleratorv1alpha1.AcceleratorLease,
+	attempt int32,
+) (ctrl.Result, error) {
+	if lease.Spec.Owner.UID != workload.UID || !metav1.IsControlledBy(lease, workload) {
+		return ctrl.Result{}, fmt.Errorf("lease %s/%s is owned by a different workload", lease.Namespace, lease.Name)
+	}
+	if lease.Spec.WorkloadGeneration != workload.Generation {
+		if err := r.releaseLease(ctx, lease); err != nil {
+			return ctrl.Result{}, err
+		}
+		workload.Status.Phase = acceleratorv1alpha1.WorkloadPhasePending
+		workload.Status.SelectedMode = ""
+		workload.Status.AllocationAttempt = attempt
+		workload.Status.Decision = nil
+		setCondition(&workload.Status.Conditions, workload.Generation, ConditionSelected, metav1.ConditionFalse, "WorkloadChanged", "discarded an allocation selected for an older workload generation", r.now())
+		return ctrl.Result{Requeue: true}, r.updateWorkloadStatus(ctx, workload)
 	}
 
+	policy := lease.Annotations[decisionPolicyAnnotation]
+	reason := lease.Annotations[decisionReasonAnnotation]
+	if reason == "" {
+		reason = fmt.Sprintf("restored existing allocation lease %s after a status retry", lease.Name)
+	}
+	decidedAt := lease.CreationTimestamp.Time
+	if decidedAt.IsZero() {
+		decidedAt = r.now()
+	}
+	return r.recordLeaseSelection(ctx, workload, lease, attempt, policy, reason, decidedAt)
+}
+
+func (r *WorkloadReconciler) recordLeaseSelection(
+	ctx context.Context,
+	workload *acceleratorv1alpha1.AcceleratorWorkload,
+	lease *acceleratorv1alpha1.AcceleratorLease,
+	attempt int32,
+	policy, reason string,
+	decidedAt time.Time,
+) (ctrl.Result, error) {
 	workload.Status.Phase = acceleratorv1alpha1.WorkloadPhaseReserving
-	workload.Status.SelectedMode = decision.Mode
+	workload.Status.SelectedMode = lease.Spec.Mode
 	workload.Status.AllocationRef = lease.Name
 	workload.Status.AllocationAttempt = attempt
 	workload.Status.Decision = &acceleratorv1alpha1.DecisionStatus{
-		Mode:        decision.Mode,
-		ProviderRef: acceleratorv1alpha1.ClusterObjectReference{Name: decision.ProviderName},
-		PoolRef:     acceleratorv1alpha1.ClusterObjectReference{Name: decision.PoolName},
-		Targets:     decision.Targets,
-		Policy:      decision.Policy,
-		Reason:      decision.Reason,
-		DecidedAt:   metav1.NewTime(r.now()),
+		Mode:        lease.Spec.Mode,
+		ProviderRef: lease.Spec.ProviderRef,
+		PoolRef:     lease.Spec.PoolRef,
+		Targets:     copyAllocationTargets(lease.Spec.Targets),
+		Policy:      policy,
+		Reason:      reason,
+		DecidedAt:   metav1.NewTime(decidedAt),
 	}
-	setCondition(&workload.Status.Conditions, workload.Generation, ConditionSelected, metav1.ConditionTrue, "Selected", decision.Reason, r.now())
+	setCondition(&workload.Status.Conditions, workload.Generation, ConditionSelected, metav1.ConditionTrue, "Selected", reason, r.now())
 	return ctrl.Result{Requeue: true}, r.updateWorkloadStatus(ctx, workload)
 }
 
@@ -235,9 +307,18 @@ func (r *WorkloadReconciler) reserveLease(ctx context.Context, workload *acceler
 	request := reservationRequest(workload, lease)
 	reservation, err := r.Allocator.Reserve(ctx, request)
 	if err != nil {
-		if contracts.IsErrorKind(err, contracts.ErrorKindConflict) || contracts.IsErrorKind(err, contracts.ErrorKindUnschedulable) {
-			_ = allocation.Transition(lease, acceleratorv1alpha1.AllocationPhaseFailed)
-			setCondition(&lease.Status.Conditions, lease.Generation, ConditionReserved, metav1.ConditionFalse, "CapacityChanged", err.Error(), r.now())
+		reason := ""
+		switch {
+		case contracts.IsErrorKind(err, contracts.ErrorKindConflict), contracts.IsErrorKind(err, contracts.ErrorKindUnschedulable):
+			reason = "CapacityChanged"
+		case contracts.IsErrorKind(err, contracts.ErrorKindInvalid), contracts.IsErrorKind(err, contracts.ErrorKindUnsupported):
+			reason = "ReservationRejected"
+		}
+		if reason != "" {
+			if transitionErr := allocation.Transition(lease, acceleratorv1alpha1.AllocationPhaseFailed); transitionErr != nil {
+				return ctrl.Result{}, transitionErr
+			}
+			setCondition(&lease.Status.Conditions, lease.Generation, ConditionReserved, metav1.ConditionFalse, reason, err.Error(), r.now())
 			if updateErr := r.updateLeaseStatus(ctx, lease); updateErr != nil {
 				return ctrl.Result{}, updateErr
 			}
@@ -246,7 +327,7 @@ func (r *WorkloadReconciler) reserveLease(ctx context.Context, workload *acceler
 			}
 			workload.Status.AllocationRef = ""
 			workload.Status.Phase = acceleratorv1alpha1.WorkloadPhasePending
-			setCondition(&workload.Status.Conditions, workload.Generation, ConditionReserved, metav1.ConditionFalse, "CapacityChanged", err.Error(), r.now())
+			setCondition(&workload.Status.Conditions, workload.Generation, ConditionReserved, metav1.ConditionFalse, reason, err.Error(), r.now())
 			return ctrl.Result{RequeueAfter: time.Second}, r.updateWorkloadStatus(ctx, workload)
 		}
 		return ctrl.Result{}, err
@@ -254,10 +335,14 @@ func (r *WorkloadReconciler) reserveLease(ctx context.Context, workload *acceler
 	if err := allocation.Transition(lease, acceleratorv1alpha1.AllocationPhaseReserved); err != nil {
 		return ctrl.Result{}, err
 	}
-	expiresAt := metav1.NewTime(reservation.ExpiresAt)
+	expiration := reservation.ExpiresAt
+	if lease.Status.ExpiresAt != nil && (expiration.IsZero() || lease.Status.ExpiresAt.Time.Before(expiration)) {
+		expiration = lease.Status.ExpiresAt.Time
+	}
+	expiresAt := metav1.NewTime(expiration)
 	lease.Status.Binding = acceleratorv1alpha1.RuntimeBinding{
 		ID:        reservation.BindingID,
-		Endpoints: append([]string(nil), reservation.Endpoints...),
+		Endpoints: copyBoundEndpoints(reservation.Endpoints),
 	}
 	lease.Status.ExpiresAt = &expiresAt
 	setCondition(&lease.Status.Conditions, lease.Generation, ConditionReserved, metav1.ConditionTrue, "Reserved", "accelerator capacity is reserved", r.now())
@@ -275,10 +360,16 @@ func (r *WorkloadReconciler) ensurePod(ctx context.Context, workload *accelerato
 	}
 	plan, err := provider.BuildRuntimePlan(ctx, providerObject, pool, lease)
 	if err != nil {
+		if isPermanentConfigurationError(err) {
+			return r.failRuntimePreparation(ctx, workload, lease, "RuntimePlanRejected", err)
+		}
 		return ctrl.Result{}, err
 	}
 	mutatedTemplate, err := r.Injector.Mutate(workload.Spec.PodTemplate, plan)
 	if err != nil {
+		if isPermanentConfigurationError(err) {
+			return r.failRuntimePreparation(ctx, workload, lease, "PodMutationRejected", err)
+		}
 		return ctrl.Result{}, err
 	}
 	pod := podFromTemplate(workload, lease, mutatedTemplate)
@@ -296,7 +387,8 @@ func (r *WorkloadReconciler) ensurePod(ctx context.Context, workload *accelerato
 			return ctrl.Result{}, err
 		}
 		if !metav1.IsControlledBy(pod, workload) || pod.Annotations["accelerator.qcrs.io/lease"] != lease.Name {
-			return ctrl.Result{}, fmt.Errorf("pod %s/%s conflicts with accelerator workload", pod.Namespace, pod.Name)
+			conflictErr := contracts.NewError(contracts.ErrorKindInvalid, "create workload pod", fmt.Sprintf("pod %s/%s conflicts with accelerator workload", pod.Namespace, pod.Name))
+			return r.failRuntimePreparation(ctx, workload, lease, "PodNameConflict", conflictErr)
 		}
 	}
 
@@ -378,17 +470,26 @@ func (r *WorkloadReconciler) syncBoundPod(ctx context.Context, workload *acceler
 	}
 	if lease.Spec.Mode == acceleratorv1alpha1.ExecutionModeRemote &&
 		pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
-		result.RequeueAfter = defaultHeartbeatCheckInterval
+		result.RequeueAfter = defaultEndpointCheckInterval
 	}
 	return result, r.updateWorkloadStatus(ctx, workload)
 }
 
-func (r *WorkloadReconciler) syncTerminalStatus(ctx context.Context, workload *acceleratorv1alpha1.AcceleratorWorkload) (ctrl.Result, error) {
+func (r *WorkloadReconciler) syncTerminalStatus(
+	ctx context.Context,
+	workload *acceleratorv1alpha1.AcceleratorWorkload,
+	lease *acceleratorv1alpha1.AcceleratorLease,
+) (ctrl.Result, error) {
 	if workload.Status.Phase == acceleratorv1alpha1.WorkloadPhaseSucceeded || workload.Status.Phase == acceleratorv1alpha1.WorkloadPhaseFailed {
 		return ctrl.Result{}, nil
 	}
 	if workload.Status.PodRef == nil {
 		workload.Status.Phase = acceleratorv1alpha1.WorkloadPhaseFailed
+		if condition := meta.FindStatusCondition(lease.Status.Conditions, ConditionRuntimeReady); condition != nil && condition.Status == metav1.ConditionFalse {
+			setCondition(&workload.Status.Conditions, workload.Generation, ConditionRuntimeReady, metav1.ConditionFalse, condition.Reason, condition.Message, r.now())
+		} else {
+			setCondition(&workload.Status.Conditions, workload.Generation, ConditionPodReady, metav1.ConditionFalse, "PodNotCreated", "the allocation was released before a Pod was created", r.now())
+		}
 		return ctrl.Result{}, r.updateWorkloadStatus(ctx, workload)
 	}
 	pod := &corev1.Pod{}
@@ -408,7 +509,46 @@ func (r *WorkloadReconciler) syncTerminalStatus(ctx context.Context, workload *a
 	return ctrl.Result{}, r.updateWorkloadStatus(ctx, workload)
 }
 
+func (r *WorkloadReconciler) failRuntimePreparation(
+	ctx context.Context,
+	workload *acceleratorv1alpha1.AcceleratorWorkload,
+	lease *acceleratorv1alpha1.AcceleratorLease,
+	reason string,
+	cause error,
+) (ctrl.Result, error) {
+	setCondition(&lease.Status.Conditions, lease.Generation, ConditionRuntimeReady, metav1.ConditionFalse, reason, cause.Error(), r.now())
+	if err := r.updateLeaseStatus(ctx, lease); err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := r.releaseLease(ctx, lease); err != nil {
+		return ctrl.Result{}, err
+	}
+	workload.Status.Phase = acceleratorv1alpha1.WorkloadPhaseFailed
+	setCondition(&workload.Status.Conditions, workload.Generation, ConditionRuntimeReady, metav1.ConditionFalse, reason, cause.Error(), r.now())
+	return ctrl.Result{}, r.updateWorkloadStatus(ctx, workload)
+}
+
+func isPermanentConfigurationError(err error) bool {
+	return contracts.IsErrorKind(err, contracts.ErrorKindInvalid) ||
+		contracts.IsErrorKind(err, contracts.ErrorKindUnsupported)
+}
+
 func (r *WorkloadReconciler) expireLease(ctx context.Context, workload *acceleratorv1alpha1.AcceleratorWorkload, lease *acceleratorv1alpha1.AcceleratorLease) (ctrl.Result, error) {
+	pod := &corev1.Pod{}
+	podKey := types.NamespacedName{Namespace: workload.Namespace, Name: podName(workload.Name, string(workload.UID))}
+	if err := r.Get(ctx, podKey, pod); err == nil {
+		if metav1.IsControlledBy(pod, workload) && pod.Annotations["accelerator.qcrs.io/lease"] == lease.Name {
+			if pod.DeletionTimestamp.IsZero() {
+				if err := r.Delete(ctx, pod); err != nil && !apierrors.IsNotFound(err) {
+					return ctrl.Result{}, err
+				}
+			}
+			return ctrl.Result{RequeueAfter: time.Second}, nil
+		}
+	} else if !apierrors.IsNotFound(err) {
+		return ctrl.Result{}, err
+	}
+
 	if err := r.Allocator.Release(ctx, reservationRequest(workload, lease)); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -427,10 +567,85 @@ func (r *WorkloadReconciler) expireLease(ctx context.Context, workload *accelera
 	return ctrl.Result{RequeueAfter: time.Second}, r.updateWorkloadStatus(ctx, workload)
 }
 
-func (r *WorkloadReconciler) releaseLease(ctx context.Context, lease *acceleratorv1alpha1.AcceleratorLease) error {
-	if lease.Status.Phase == "" {
-		return r.removeLeaseFinalizer(ctx, lease)
+func (r *WorkloadReconciler) finalizeDeletingLease(
+	ctx context.Context,
+	workload *acceleratorv1alpha1.AcceleratorWorkload,
+	lease *acceleratorv1alpha1.AcceleratorLease,
+) (ctrl.Result, error) {
+	podPhase, waiting, err := r.deleteActiveLeasePod(ctx, workload, lease)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
+	if waiting {
+		return ctrl.Result{RequeueAfter: time.Second}, nil
+	}
+
+	statusChanged := false
+	switch podPhase {
+	case corev1.PodSucceeded:
+		if workload.Status.Phase != acceleratorv1alpha1.WorkloadPhaseSucceeded {
+			workload.Status.Phase = acceleratorv1alpha1.WorkloadPhaseSucceeded
+			setCondition(&workload.Status.Conditions, workload.Generation, ConditionPodReady, metav1.ConditionFalse, "Terminated", "pod completed before its allocation lease was deleted", r.now())
+			statusChanged = true
+		}
+	case corev1.PodFailed:
+		if workload.Status.Phase != acceleratorv1alpha1.WorkloadPhaseFailed {
+			workload.Status.Phase = acceleratorv1alpha1.WorkloadPhaseFailed
+			setCondition(&workload.Status.Conditions, workload.Generation, ConditionPodReady, metav1.ConditionFalse, "Terminated", "pod failed before its allocation lease was deleted", r.now())
+			statusChanged = true
+		}
+	default:
+		if !workloadPhaseTerminal(workload.Status.Phase) {
+			workload.Status.Phase = acceleratorv1alpha1.WorkloadPhaseFailed
+			setCondition(&workload.Status.Conditions, workload.Generation, ConditionReserved, metav1.ConditionFalse, "LeaseDeleted", "allocation lease was deleted before workload completion", r.now())
+			statusChanged = true
+		}
+	}
+	if statusChanged {
+		if err := r.updateWorkloadStatus(ctx, workload); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+	if err := r.releaseLease(ctx, lease); err != nil {
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{Requeue: true}, nil
+}
+
+func (r *WorkloadReconciler) deleteActiveLeasePod(
+	ctx context.Context,
+	workload *acceleratorv1alpha1.AcceleratorWorkload,
+	lease *acceleratorv1alpha1.AcceleratorLease,
+) (corev1.PodPhase, bool, error) {
+	podKey := types.NamespacedName{Namespace: workload.Namespace, Name: podName(workload.Name, string(workload.UID))}
+	if lease.Status.PodRef != nil && lease.Status.PodRef.Name != "" {
+		podKey.Name = lease.Status.PodRef.Name
+	}
+	pod := &corev1.Pod{}
+	if err := r.Get(ctx, podKey, pod); err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+
+	uidMatches := lease.Status.PodRef != nil && lease.Status.PodRef.UID != "" && lease.Status.PodRef.UID == pod.UID
+	annotationMatches := pod.Annotations["accelerator.qcrs.io/lease"] == lease.Name
+	if !metav1.IsControlledBy(pod, workload) || (!uidMatches && !annotationMatches) {
+		return "", false, nil
+	}
+	if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+		return pod.Status.Phase, false, nil
+	}
+	if pod.DeletionTimestamp.IsZero() {
+		if err := r.Delete(ctx, pod); err != nil && !apierrors.IsNotFound(err) {
+			return "", false, err
+		}
+	}
+	return pod.Status.Phase, true, nil
+}
+
+func (r *WorkloadReconciler) releaseLease(ctx context.Context, lease *acceleratorv1alpha1.AcceleratorLease) error {
 	if lease.Status.Phase == acceleratorv1alpha1.AllocationPhaseReleased {
 		return r.removeLeaseFinalizer(ctx, lease)
 	}
@@ -470,7 +685,7 @@ func (r *WorkloadReconciler) finalizeWorkload(ctx context.Context, workload *acc
 	}
 	pod := &corev1.Pod{}
 	err := r.Get(ctx, podKey, pod)
-	if err == nil {
+	if err == nil && metav1.IsControlledBy(pod, workload) {
 		if pod.DeletionTimestamp.IsZero() {
 			if err := r.Delete(ctx, pod); err != nil && !apierrors.IsNotFound(err) {
 				return ctrl.Result{}, err
@@ -478,7 +693,7 @@ func (r *WorkloadReconciler) finalizeWorkload(ctx context.Context, workload *acc
 		}
 		return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 	}
-	if !apierrors.IsNotFound(err) {
+	if err != nil && !apierrors.IsNotFound(err) {
 		return ctrl.Result{}, err
 	}
 
@@ -510,32 +725,65 @@ func (r *WorkloadReconciler) remoteTargetsHealthy(ctx context.Context, lease *ac
 			}
 			return false, "", err
 		}
-		if condition := meta.FindStatusCondition(endpoint.Status.Conditions, "AgentReady"); condition == nil || condition.Status != metav1.ConditionTrue {
-			return false, fmt.Sprintf("endpoint %s is not AgentReady", target.EndpointName), nil
+		if endpoint.Spec.Unschedulable {
+			return false, fmt.Sprintf("endpoint %s is unschedulable", target.EndpointName), nil
 		}
-		if endpoint.Status.HeartbeatLeaseRef == nil {
-			return false, fmt.Sprintf("endpoint %s has no heartbeat Lease", target.EndpointName), nil
+		if condition := meta.FindStatusCondition(endpoint.Status.Conditions, "Ready"); condition != nil && condition.Status != metav1.ConditionTrue {
+			return false, fmt.Sprintf("endpoint %s Ready condition is %s: %s", target.EndpointName, condition.Status, condition.Message), nil
 		}
-		heartbeat := &coordinationv1.Lease{}
-		key := types.NamespacedName{
-			Namespace: endpoint.Status.HeartbeatLeaseRef.Namespace,
-			Name:      endpoint.Status.HeartbeatLeaseRef.Name,
+		binding, found := boundEndpoint(lease.Status.Binding.Endpoints, target.EndpointName)
+		if !found {
+			return false, fmt.Sprintf("endpoint %s has no immutable binding snapshot", target.EndpointName), nil
 		}
-		if err := r.Get(ctx, key, heartbeat); err != nil {
-			if apierrors.IsNotFound(err) {
-				return false, fmt.Sprintf("endpoint %s heartbeat Lease is missing", target.EndpointName), nil
+		if endpoint.Spec.PoolRef.Name != lease.Spec.PoolRef.Name {
+			return false, fmt.Sprintf("endpoint %s moved to pool %s after the workload was bound", target.EndpointName, endpoint.Spec.PoolRef.Name), nil
+		}
+		if endpoint.Spec.Address != binding.Address {
+			return false, fmt.Sprintf("endpoint %s address changed after the workload was bound", target.EndpointName), nil
+		}
+		if endpoint.Spec.Runtime != binding.Runtime {
+			return false, fmt.Sprintf("endpoint %s runtime changed after the workload was bound", target.EndpointName), nil
+		}
+		if !stringMapsEqual(endpoint.Spec.Parameters, binding.Parameters) {
+			return false, fmt.Sprintf("endpoint %s connection parameters changed after the workload was bound", target.EndpointName), nil
+		}
+		for _, deviceID := range target.DeviceIDs {
+			if !healthyDeviceExists(endpoint.Spec.Devices, deviceID) {
+				return false, fmt.Sprintf("endpoint %s device %s is no longer declared healthy", target.EndpointName, deviceID), nil
 			}
-			return false, "", err
-		}
-		if heartbeat.Spec.RenewTime == nil || heartbeat.Spec.LeaseDurationSeconds == nil {
-			return false, fmt.Sprintf("endpoint %s heartbeat Lease is incomplete", target.EndpointName), nil
-		}
-		expiresAt := heartbeat.Spec.RenewTime.Add(time.Duration(*heartbeat.Spec.LeaseDurationSeconds) * time.Second)
-		if !r.now().Before(expiresAt) {
-			return false, fmt.Sprintf("endpoint %s heartbeat expired", target.EndpointName), nil
 		}
 	}
-	return true, "all selected remote endpoints have current heartbeats", nil
+	return true, "all selected remote endpoints remain configured and ready", nil
+}
+
+func boundEndpoint(endpoints []acceleratorv1alpha1.BoundEndpoint, name string) (acceleratorv1alpha1.BoundEndpoint, bool) {
+	for _, endpoint := range endpoints {
+		if endpoint.Name == name {
+			return endpoint, true
+		}
+	}
+	return acceleratorv1alpha1.BoundEndpoint{}, false
+}
+
+func healthyDeviceExists(devices []acceleratorv1alpha1.DeviceInfo, id string) bool {
+	for _, device := range devices {
+		if device.ID == id {
+			return device.Health == acceleratorv1alpha1.DeviceHealthHealthy
+		}
+	}
+	return false
+}
+
+func stringMapsEqual(left, right map[string]string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for key, value := range left {
+		if right[key] != value {
+			return false
+		}
+	}
+	return true
 }
 
 func (r *WorkloadReconciler) resolveProvider(
@@ -684,6 +932,10 @@ func podReady(pod *corev1.Pod) bool {
 	return false
 }
 
+func workloadPhaseTerminal(phase acceleratorv1alpha1.WorkloadPhase) bool {
+	return phase == acceleratorv1alpha1.WorkloadPhaseSucceeded || phase == acceleratorv1alpha1.WorkloadPhaseFailed
+}
+
 func copyMap(source map[string]string) map[string]string {
 	if source == nil {
 		return nil
@@ -691,6 +943,30 @@ func copyMap(source map[string]string) map[string]string {
 	result := make(map[string]string, len(source))
 	for key, value := range source {
 		result[key] = value
+	}
+	return result
+}
+
+func copyBoundEndpoints(source []acceleratorv1alpha1.BoundEndpoint) []acceleratorv1alpha1.BoundEndpoint {
+	if source == nil {
+		return nil
+	}
+	result := make([]acceleratorv1alpha1.BoundEndpoint, len(source))
+	for index := range source {
+		result[index] = source[index]
+		result[index].Parameters = copyMap(source[index].Parameters)
+	}
+	return result
+}
+
+func copyAllocationTargets(source []acceleratorv1alpha1.AllocationTarget) []acceleratorv1alpha1.AllocationTarget {
+	if source == nil {
+		return nil
+	}
+	result := make([]acceleratorv1alpha1.AllocationTarget, len(source))
+	for index := range source {
+		result[index] = source[index]
+		result[index].DeviceIDs = append([]string(nil), source[index].DeviceIDs...)
 	}
 	return result
 }

@@ -10,10 +10,11 @@ import (
 )
 
 type CapabilitySet struct {
-	DeviceKinds  []acceleratorv1alpha1.DeviceKind
-	Modes        []acceleratorv1alpha1.ExecutionMode
-	SupportsTLS  bool
-	SupportsAuth bool
+	DeviceKinds           []acceleratorv1alpha1.DeviceKind
+	Modes                 []acceleratorv1alpha1.ExecutionMode
+	RemoteAllocationModes []acceleratorv1alpha1.RemoteAllocationMode
+	SupportsTLS           bool
+	SupportsAuth          bool
 }
 
 type Device struct {
@@ -25,7 +26,7 @@ type Device struct {
 }
 
 // Candidate is a normalized allocation unit. Local candidates represent one
-// Kubernetes Node; remote candidates represent one Agent endpoint.
+// Kubernetes Node; remote candidates represent one runtime endpoint.
 type Candidate struct {
 	ID           string
 	ProviderName string
@@ -36,8 +37,8 @@ type Candidate struct {
 
 	NodeName       string
 	EndpointName   string
-	ControlAddress string
 	ResourceName   corev1.ResourceName
+	Exclusive      bool
 
 	Vendor       string
 	Model        string
@@ -85,7 +86,7 @@ type ReservationRequest struct {
 
 type Reservation struct {
 	BindingID string
-	Endpoints []string
+	Endpoints []acceleratorv1alpha1.BoundEndpoint
 	ExpiresAt time.Time
 }
 
@@ -127,32 +128,31 @@ type PodInjector interface {
 	JSONPatch(before, after corev1.PodTemplateSpec) ([]byte, error)
 }
 
-type AgentReservationRequest struct {
-	LeaseKey    string
-	DeviceIDs   []string
-	ExpiresAt   time.Time
-	WorkloadUID string
+type RemoteEndpoint struct {
+	Name          string
+	PoolName      string
+	Address       string
+	Runtime       acceleratorv1alpha1.RuntimeInfo
+	Devices       []acceleratorv1alpha1.DeviceInfo
+	Parameters    map[string]string
+	Unschedulable bool
+	Readiness     *EndpointReadiness
 }
 
-type AgentReservation struct {
-	BindingID string
-	Endpoints []string
-}
-
-type AgentClient interface {
-	Reserve(ctx context.Context, controlAddress string, request AgentReservationRequest) (AgentReservation, error)
-	Release(ctx context.Context, controlAddress, leaseKey string) error
+// EndpointReadiness is nil when a static endpoint has no external health
+// observer. A non-nil value represents the explicitly published Ready state.
+type EndpointReadiness struct {
+	Ready   bool
+	Reason  string
+	Message string
 }
 
 type EndpointResolver interface {
-	ControlAddress(ctx context.Context, endpointName string) (string, error)
+	Resolve(ctx context.Context, endpointName string) (RemoteEndpoint, error)
 }
 
-type DeviceProbe interface {
-	Probe(ctx context.Context) ([]acceleratorv1alpha1.DeviceInfo, acceleratorv1alpha1.RuntimeInfo, error)
-}
-
-type SessionProvisioner interface {
-	Prepare(ctx context.Context, request AgentReservationRequest) (AgentReservation, error)
-	Release(ctx context.Context, leaseKey string) error
+// RemoteEndpointValidator owns runtime-specific validation while keeping the
+// inventory and allocation layers independent of a concrete remote runtime.
+type RemoteEndpointValidator interface {
+	ValidateEndpoint(endpoint RemoteEndpoint) error
 }

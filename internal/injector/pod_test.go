@@ -20,10 +20,11 @@ func TestMutateIsIdempotent(t *testing.T) {
 		}},
 		InitContainers: []corev1.Container{{Name: "accelerator-runtime-setup", Image: "runtime"}},
 		Env: []corev1.EnvVar{
-			{Name: "LUPINE_SERVER", Value: "https://gpu.example"},
-			{Name: "LD_LIBRARY_PATH", Value: "/opt/accelerator/lupine"},
+			{Name: "REMOTE_GPU_ADDRESS", Value: "gpu.example"},
+			{Name: "LD_PRELOAD", Value: "/opt/accelerator/cricket/cricket-client.so"},
+			{Name: "LD_LIBRARY_PATH", Value: "/opt/accelerator/cricket"},
 		},
-		VolumeMounts: []corev1.VolumeMount{{Name: "accelerator-runtime", MountPath: "/opt/accelerator/lupine", ReadOnly: true}},
+		VolumeMounts: []corev1.VolumeMount{{Name: "accelerator-runtime", MountPath: "/opt/accelerator/cricket", ReadOnly: true}},
 		Annotations:  map[string]string{"accelerator.qcrs.io/mode": "Remote"},
 	}
 	mutator := NewPodMutator()
@@ -48,15 +49,36 @@ func TestMutateRejectsManagedEnvironmentConflict(t *testing.T) {
 	template := corev1.PodTemplateSpec{Spec: corev1.PodSpec{
 		Containers: []corev1.Container{{
 			Name: "worker",
-			Env:  []corev1.EnvVar{{Name: "LUPINE_SERVER", Value: "other:14833"}},
+			Env:  []corev1.EnvVar{{Name: "REMOTE_GPU_ADDRESS", Value: "other"}},
 		}},
 	}}
 	_, err := NewPodMutator().Mutate(template, contracts.RuntimePlan{
 		ContainerName: "worker",
-		Env:           []corev1.EnvVar{{Name: "LUPINE_SERVER", Value: "selected:14833"}},
+		Env:           []corev1.EnvVar{{Name: "REMOTE_GPU_ADDRESS", Value: "selected"}},
 	})
 	if !contracts.IsErrorKind(err, contracts.ErrorKindInvalid) {
 		t.Fatalf("expected invalid conflict, got %v", err)
+	}
+}
+
+func TestMutateComposesExistingPreload(t *testing.T) {
+	template := corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+		Containers: []corev1.Container{{
+			Name: "worker",
+			Env:  []corev1.EnvVar{{Name: "LD_PRELOAD", Value: "/opt/existing.so"}},
+		}},
+	}}
+	mutated, err := NewPodMutator().Mutate(template, contracts.RuntimePlan{
+		ContainerName: "worker",
+		Env: []corev1.EnvVar{{
+			Name: "LD_PRELOAD", Value: "/opt/accelerator/cricket/cricket-client.so",
+		}},
+	})
+	if err != nil {
+		t.Fatalf("mutation failed: %v", err)
+	}
+	if got := mutated.Spec.Containers[0].Env[0].Value; got != "/opt/accelerator/cricket/cricket-client.so:/opt/existing.so" {
+		t.Fatalf("unexpected LD_PRELOAD value %q", got)
 	}
 }
 
