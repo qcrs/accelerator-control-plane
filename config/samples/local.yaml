@@ -20,11 +20,57 @@ spec:
   priority: 100
   local:
     resourceName: nvidia.com/gpu
+    resourceForm: WholeDevice
     nodeSelector:
       nvidia.com/gpu.present: "true"
     vendorLabelKey: accelerator.qcrs.io/vendor
     modelLabelKey: nvidia.com/gpu.product
     memoryLabelKey: accelerator.qcrs.io/gpu-memory
+---
+# Static MIG profiles published as extended resources use the same generic
+# local Adapter. This Pool becomes usable when the Device Plugin advertises
+# nvidia.com/mig-1g.10gb on a matching Node.
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorPool
+metadata:
+  name: local-nvidia-mig-1g-10gb
+  labels:
+    accelerator.qcrs.io/tier: local
+spec:
+  providerRef:
+    name: local-nvidia
+  location: Local
+  deviceType: GPU
+  priority: 90
+  local:
+    resourceName: nvidia.com/mig-1g.10gb
+    resourceForm: MIG
+    profile: 1g.10gb
+    isolation: hardware-partition
+    vendor: nvidia
+---
+# Replace this resource name and metadata with those published by the chosen
+# sharing Device Plugin (for example, a HAMi integration).
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorPool
+metadata:
+  name: local-gpu-shared
+  labels:
+    accelerator.qcrs.io/tier: local
+spec:
+  providerRef:
+    name: local-nvidia
+  location: Local
+  deviceType: GPU
+  priority: 80
+  local:
+    resourceName: example.com/gpu-share
+    resourceForm: Shared
+    profile: 5Gi-share
+    isolation: software
+    vendor: nvidia
+    attributes:
+      example.com/memory-per-share: 5Gi
 ---
 apiVersion: accelerator.qcrs.io/v1alpha1
 kind: AcceleratorWorkload
@@ -41,6 +87,12 @@ spec:
     mode: Auto
     order: [Local, Remote]
     reservationTTL: 5m
+    # Apply remote-cricket.yaml (or another Remote Pool) for cross-mode retry.
+    fallback:
+      enabled: true
+      maxAttempts: 2
+      startupTimeout: 5m
+      backoff: 5s
   podTemplate:
     metadata:
       labels:

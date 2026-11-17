@@ -5,6 +5,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// +kubebuilder:validation:Enum=Pending;Reserved;Bound;Releasing;Released;Failed;Expired
 type AllocationPhase string
 
 const (
@@ -29,6 +30,13 @@ type AcceleratorLeaseSpec struct {
 
 	Request AcceleratorRequest `json:"request"`
 
+	// Driver snapshots the ExecutionAdapter selected for this allocation. The
+	// release path uses it directly so Provider or Pool deletion cannot strand
+	// an active allocation finalizer. It is optional only for compatibility
+	// with Leases created before this field was introduced.
+	// +kubebuilder:validation:MinLength=1
+	Driver string `json:"driver,omitempty"`
+
 	ProviderRef ClusterObjectReference `json:"providerRef"`
 	PoolRef     ClusterObjectReference `json:"poolRef"`
 
@@ -49,6 +57,8 @@ type AcceleratorLeaseStatus struct {
 	ExpiresAt *metav1.Time            `json:"expiresAt,omitempty"`
 	PodRef    *corev1.ObjectReference `json:"podRef,omitempty"`
 
+	// +listType=map
+	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 

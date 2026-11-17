@@ -6,6 +6,7 @@ import (
 
 	"github.com/qcrs/accelerator-control-plane/internal/contracts"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 func TestMutateIsIdempotent(t *testing.T) {
@@ -39,6 +40,9 @@ func TestMutateIsIdempotent(t *testing.T) {
 	if !reflect.DeepEqual(first, second) {
 		t.Fatal("mutation is not idempotent")
 	}
+	if first.Annotations[contracts.RuntimeInitContainersAnnotation] != "accelerator-runtime-setup" {
+		t.Fatalf("managed runtime init container identity was not annotated: %#v", first.Annotations)
+	}
 	patch, err := mutator.JSONPatch(template, first)
 	if err != nil || len(patch) == 0 || string(patch) == "[]" {
 		t.Fatalf("expected non-empty JSON patch, got %q, %v", patch, err)
@@ -61,24 +65,21 @@ func TestMutateRejectsManagedEnvironmentConflict(t *testing.T) {
 	}
 }
 
-func TestMutateComposesExistingPreload(t *testing.T) {
+func TestMutateRejectsExistingPreloadConflict(t *testing.T) {
 	template := corev1.PodTemplateSpec{Spec: corev1.PodSpec{
 		Containers: []corev1.Container{{
 			Name: "worker",
 			Env:  []corev1.EnvVar{{Name: "LD_PRELOAD", Value: "/opt/existing.so"}},
 		}},
 	}}
-	mutated, err := NewPodMutator().Mutate(template, contracts.RuntimePlan{
+	_, err := NewPodMutator().Mutate(template, contracts.RuntimePlan{
 		ContainerName: "worker",
 		Env: []corev1.EnvVar{{
 			Name: "LD_PRELOAD", Value: "/opt/accelerator/cricket/cricket-client.so",
 		}},
 	})
-	if err != nil {
-		t.Fatalf("mutation failed: %v", err)
-	}
-	if got := mutated.Spec.Containers[0].Env[0].Value; got != "/opt/accelerator/cricket/cricket-client.so:/opt/existing.so" {
-		t.Fatalf("unexpected LD_PRELOAD value %q", got)
+	if !contracts.IsErrorKind(err, contracts.ErrorKindInvalid) {
+		t.Fatalf("expected explicit LD_PRELOAD conflict, got %v", err)
 	}
 }
 
@@ -127,5 +128,48 @@ func TestMutateNarrowsExistingNodeAffinityToSelectedNode(t *testing.T) {
 	expressions := mutated.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions
 	if len(expressions) != 2 || len(expressions[1].Values) != 1 || expressions[1].Values[0] != "node-a" {
 		t.Fatalf("selected node was not enforced exactly: %#v", expressions)
+	}
+}
+
+func TestMutateRejectsVolumeAndResourceConflicts(t *testing.T) {
+	tests := []struct {
+		name     string
+		template corev1.PodTemplateSpec
+		plan     contracts.RuntimePlan
+	}{
+		{
+			name: "volume",
+			template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+				Containers: []corev1.Container{{Name: "worker"}},
+				Volumes: []corev1.Volume{{
+					Name: "runtime", VolumeSource: corev1.VolumeSource{HostPath: &corev1.HostPathVolumeSource{Path: "/user"}},
+				}},
+			}},
+			plan: contracts.RuntimePlan{
+				ContainerName: "worker",
+				Volumes: []corev1.Volume{{
+					Name: "runtime", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+				}},
+			},
+		},
+		{
+			name: "resource",
+			template: corev1.PodTemplateSpec{Spec: corev1.PodSpec{Containers: []corev1.Container{{
+				Name: "worker", Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{"example.com/gpu-share": resource.MustParse("1")},
+				},
+			}}}},
+			plan: func() contracts.RuntimePlan {
+				resources := ResourceRequirements("example.com/gpu-share", 2)
+				return contracts.RuntimePlan{ContainerName: "worker", Resources: &resources}
+			}(),
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := NewPodMutator().Mutate(test.template, test.plan); !contracts.IsErrorKind(err, contracts.ErrorKindInvalid) {
+				t.Fatalf("expected explicit conflict, got %v", err)
+			}
+		})
 	}
 }

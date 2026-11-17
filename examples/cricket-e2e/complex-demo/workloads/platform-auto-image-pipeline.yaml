@@ -1,0 +1,43 @@
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorWorkload
+metadata:
+  name: platform-auto-image-pipeline
+  namespace: default
+  labels:
+    accelerator.qcrs.io/demo: complex-image
+    accelerator.qcrs.io/task: platform-auto
+spec:
+  accelerator:
+    deviceType: GPU
+    vendor: nvidia
+    count: 1
+    containerName: worker
+  placement:
+    mode: Auto
+    order:
+      - Local
+      - Remote
+    reservationTTL: 10m
+    fallback:
+      enabled: true
+      maxAttempts: 2
+      startupTimeout: 5m
+      backoff: 5s
+  podTemplate:
+    metadata:
+      labels:
+        app: platform-auto-image-pipeline
+        accelerator.qcrs.io/demo: complex-image
+      annotations:
+        accelerator.qcrs.io/purpose: platform-auto-and-fallback
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: cricket-image-demos:cuda12.8
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DEMO_TASK
+              value: image-pipeline
+            - name: OUTPUT_PATH
+              value: /tmp/platform-auto-edge.pgm

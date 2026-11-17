@@ -1,0 +1,35 @@
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorWorkload
+metadata:
+  name: complex-image-pipeline
+  namespace: default
+  labels:
+    accelerator.qcrs.io/demo: complex-image
+    accelerator.qcrs.io/task: image-pipeline
+spec:
+  accelerator:
+    deviceType: GPU
+    vendor: nvidia
+    count: 1
+    containerName: worker
+  placement:
+    mode: RemoteOnly
+    reservationTTL: 10m
+  podTemplate:
+    metadata:
+      labels:
+        app: complex-image-pipeline
+        accelerator.qcrs.io/demo: complex-image
+      annotations:
+        accelerator.qcrs.io/purpose: remote-image-pipeline
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: cricket-image-demos:cuda12.8
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DEMO_TASK
+              value: image-pipeline
+            - name: OUTPUT_PATH
+              value: /tmp/image-pipeline-edge.pgm

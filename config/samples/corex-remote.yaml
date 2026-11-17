@@ -1,0 +1,80 @@
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorProvider
+metadata:
+  name: corex-remote
+spec:
+  driver: corex-remote
+  deviceKinds:
+    - GPU
+  clientRuntime:
+    image: corex-remote-client:arm64
+    runtimeVersion: corex-remote-arm64-4.4
+    sourcePath: /opt/corex-remote/lib
+    mountPath: /opt/accelerator/corex
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorPool
+metadata:
+  name: corex-remote
+  labels:
+    accelerator.qcrs.io/tier: remote
+spec:
+  providerRef:
+    name: corex-remote
+  location: Remote
+  deviceType: GPU
+  priority: 10
+  remote:
+    allocationMode: ExclusiveEndpoint
+    endpointSelector:
+      matchLabels:
+        accelerator.qcrs.io/runtime: corex-remote
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorEndpoint
+metadata:
+  name: corex-remote-server
+  labels:
+    accelerator.qcrs.io/runtime: corex-remote
+spec:
+  poolRef:
+    name: corex-remote
+  address: corex-remote-server-0.corex-remote-server.accelerator-system.svc.cluster.local:50051
+  runtime:
+    driver: corex-remote
+    version: corex-remote-arm64-4.4
+    apiVersion: "3"
+  devices:
+    - id: gpu-0
+      vendor: iluvatar
+      model: MR-V100
+      memory: 16Gi
+      resourceForm: WholeDevice
+      health: Healthy
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorWorkload
+metadata:
+  name: corex-remote-smoke
+  namespace: default
+spec:
+  accelerator:
+    deviceType: GPU
+    vendor: iluvatar
+    count: 1
+    containerName: worker
+  placement:
+    mode: RemoteOnly
+    reservationTTL: 5m
+  podTemplate:
+    metadata:
+      labels:
+        app: corex-remote-smoke
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: corex-workload:arm64
+          imagePullPolicy: Never
+          command: ["/opt/workload/driver_smoke_app"]
+          args: ["/opt/workload/driver_kernel.cubin"]

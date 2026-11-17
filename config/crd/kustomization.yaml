@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - bases/accelerator.qcrs.io_acceleratorproviders.yaml
+  - bases/accelerator.qcrs.io_acceleratorpools.yaml
+  - bases/accelerator.qcrs.io_acceleratorendpoints.yaml
+  - bases/accelerator.qcrs.io_acceleratorworkloads.yaml
+  - bases/accelerator.qcrs.io_acceleratorleases.yaml
+patches:
+  - path: patches/acceleratorworkload-podtemplate-metadata.yaml
+    target:
+      group: apiextensions.k8s.io
+      version: v1
+      kind: CustomResourceDefinition
+      name: acceleratorworkloads.accelerator.qcrs.io

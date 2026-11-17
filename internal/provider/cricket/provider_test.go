@@ -6,6 +6,7 @@ import (
 
 	acceleratorv1alpha1 "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
 	"github.com/qcrs/accelerator-control-plane/internal/contracts"
+	corev1 "k8s.io/api/core/v1"
 )
 
 func TestBuildRuntimePlanInjectsCricketClient(t *testing.T) {
@@ -25,7 +26,7 @@ func TestBuildRuntimePlanInjectsCricketClient(t *testing.T) {
 				ID: "remote/lease",
 				Endpoints: []acceleratorv1alpha1.BoundEndpoint{{
 					Name: "gpu-a", Address: "gpu-a.example:43123",
-					Runtime: acceleratorv1alpha1.RuntimeInfo{Driver: DriverName},
+					Runtime:    acceleratorv1alpha1.RuntimeInfo{Driver: DriverName, Version: "test-version"},
 					Parameters: map[string]string{ParameterRPCID: "7"},
 				}},
 			},
@@ -52,6 +53,9 @@ func TestBuildRuntimePlanInjectsCricketClient(t *testing.T) {
 	}
 	if len(plan.InitContainers) != 1 || len(plan.Volumes) != 1 || len(plan.VolumeMounts) != 1 {
 		t.Fatalf("runtime materialization is incomplete: %#v", plan)
+	}
+	if plan.Mode != acceleratorv1alpha1.ExecutionModeRemote || plan.Resources != nil || plan.RequiredNodeName != "" {
+		t.Fatalf("remote plan contains a local execution request: %#v", plan)
 	}
 }
 
@@ -82,8 +86,8 @@ func TestNormalizeAddressRejectsUnsupportedForms(t *testing.T) {
 
 func TestValidateEndpointRequiresMatchingAPIVersion(t *testing.T) {
 	endpoint := contracts.RemoteEndpoint{
-		Address: "gpu.example",
-		Runtime: acceleratorv1alpha1.RuntimeInfo{Driver: DriverName, APIVersion: "1"},
+		Address:    "gpu.example",
+		Runtime:    acceleratorv1alpha1.RuntimeInfo{Driver: DriverName, Version: "test-version", APIVersion: "1"},
 		Parameters: map[string]string{ParameterRPCID: "2"},
 	}
 	if err := New().ValidateEndpoint(endpoint); err == nil {
@@ -91,22 +95,30 @@ func TestValidateEndpointRequiresMatchingAPIVersion(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsUnsupportedAuthentication(t *testing.T) {
+	provider, _ := validConfiguration()
+	provider.Spec.AuthSecretRef = &corev1.SecretReference{Name: "credentials"}
+	if err := New().ValidateProvider(provider); !contracts.IsErrorKind(err, contracts.ErrorKindUnsupported) {
+		t.Fatalf("expected unsupported authentication error, got %v", err)
+	}
+}
+
 func validConfiguration() (*acceleratorv1alpha1.AcceleratorProvider, *acceleratorv1alpha1.AcceleratorPool) {
 	return &acceleratorv1alpha1.AcceleratorProvider{
-		Spec: acceleratorv1alpha1.AcceleratorProviderSpec{
-			Driver:      DriverName,
-			DeviceKinds: []acceleratorv1alpha1.DeviceKind{acceleratorv1alpha1.DeviceKindGPU},
-			ClientRuntime: &acceleratorv1alpha1.ClientRuntimeSpec{
-				Image: "cricket-client:test",
+			Spec: acceleratorv1alpha1.AcceleratorProviderSpec{
+				Driver:      DriverName,
+				DeviceKinds: []acceleratorv1alpha1.DeviceKind{acceleratorv1alpha1.DeviceKindGPU},
+				ClientRuntime: &acceleratorv1alpha1.ClientRuntimeSpec{
+					Image: "cricket-client:test", RuntimeVersion: "test-version",
+				},
 			},
-		},
-	}, &acceleratorv1alpha1.AcceleratorPool{
-		Spec: acceleratorv1alpha1.AcceleratorPoolSpec{
-			Location:   acceleratorv1alpha1.ExecutionModeRemote,
-			DeviceType: acceleratorv1alpha1.DeviceKindGPU,
-			Remote: &acceleratorv1alpha1.RemotePoolConfig{
-				AllocationMode: acceleratorv1alpha1.RemoteAllocationModeExclusiveEndpoint,
+		}, &acceleratorv1alpha1.AcceleratorPool{
+			Spec: acceleratorv1alpha1.AcceleratorPoolSpec{
+				Location:   acceleratorv1alpha1.ExecutionModeRemote,
+				DeviceType: acceleratorv1alpha1.DeviceKindGPU,
+				Remote: &acceleratorv1alpha1.RemotePoolConfig{
+					AllocationMode: acceleratorv1alpha1.RemoteAllocationModeExclusiveEndpoint,
+				},
 			},
-		},
-	}
+		}
 }

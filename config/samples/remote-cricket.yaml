@@ -9,6 +9,7 @@ spec:
     # Build this image from the pinned Cricket source documented in
     # docs/cricket-integration.md. It must contain the complete build/bin tree.
     image: registry.example.com/accelerator/cricket-client:5d55bd5
+    runtimeVersion: 5d55bd582fc7acbb2a12c45f104020566a67218a
     sourcePath: /opt/cricket/bin
     mountPath: /opt/accelerator/cricket
 ---
@@ -54,6 +55,7 @@ spec:
       vendor: nvidia
       model: A100
       memory: 40Gi
+      resourceForm: WholeDevice
       health: Healthy
 ---
 apiVersion: accelerator.qcrs.io/v1alpha1

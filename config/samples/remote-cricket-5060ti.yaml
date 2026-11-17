@@ -1,0 +1,86 @@
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorProvider
+metadata:
+  name: remote-cricket-5060ti
+spec:
+  driver: cricket
+  deviceKinds:
+    - GPU
+  clientRuntime:
+    image: cricket-client:5d55bd5
+    runtimeVersion: 5d55bd582fc7acbb2a12c45f104020566a67218a
+    sourcePath: /opt/cricket/bin
+    mountPath: /opt/accelerator/cricket
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorPool
+metadata:
+  name: remote-cricket-5060ti
+  labels:
+    accelerator.qcrs.io/tier: remote
+spec:
+  providerRef:
+    name: remote-cricket-5060ti
+  location: Remote
+  deviceType: GPU
+  priority: 10
+  remote:
+    allocationMode: ExclusiveEndpoint
+    endpointSelector:
+      matchLabels:
+        accelerator.qcrs.io/runtime: cricket
+        accelerator.qcrs.io/host: windows-5060ti
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorEndpoint
+metadata:
+  name: windows-5060ti
+  labels:
+    accelerator.qcrs.io/runtime: cricket
+    accelerator.qcrs.io/host: windows-5060ti
+spec:
+  poolRef:
+    name: remote-cricket-5060ti
+  address: 192.168.5.6:53773
+  runtime:
+    driver: cricket
+    version: 5d55bd582fc7acbb2a12c45f104020566a67218a
+    apiVersion: "1"
+  parameters:
+    rpcID: "1"
+  devices:
+    - id: gpu-0
+      uuid: GPU-759bebb9-5457-e2a1-099c-7430d065b190
+      vendor: nvidia
+      model: NVIDIA GeForce RTX 5060 Ti
+      memory: 16Gi
+      resourceForm: WholeDevice
+      health: Healthy
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorWorkload
+metadata:
+  name: remote-kernel-test
+  namespace: default
+spec:
+  accelerator:
+    deviceType: GPU
+    vendor: nvidia
+    count: 1
+    containerName: worker
+  placement:
+    mode: RemoteOnly
+    reservationTTL: 5m
+  podTemplate:
+    metadata:
+      labels:
+        app: remote-kernel-test
+        accelerator.qcrs.io/demo: remote-cricket
+      annotations:
+        accelerator.qcrs.io/purpose: remote-gpu-e2e
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: cricket-remote-kernel-test:cuda12.8
+          imagePullPolicy: IfNotPresent

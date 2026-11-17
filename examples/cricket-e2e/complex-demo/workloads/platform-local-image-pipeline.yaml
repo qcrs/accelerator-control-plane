@@ -1,0 +1,35 @@
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorWorkload
+metadata:
+  name: platform-local-image-pipeline
+  namespace: default
+  labels:
+    accelerator.qcrs.io/demo: complex-image
+    accelerator.qcrs.io/task: platform-local
+spec:
+  accelerator:
+    deviceType: GPU
+    vendor: nvidia
+    count: 1
+    containerName: worker
+  placement:
+    mode: LocalOnly
+    reservationTTL: 10m
+  podTemplate:
+    metadata:
+      labels:
+        app: platform-local-image-pipeline
+        accelerator.qcrs.io/demo: complex-image
+      annotations:
+        accelerator.qcrs.io/purpose: platform-local-adapter
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: cricket-image-demos:cuda12.8
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: DEMO_TASK
+              value: image-pipeline
+            - name: OUTPUT_PATH
+              value: /tmp/platform-local-edge.pgm

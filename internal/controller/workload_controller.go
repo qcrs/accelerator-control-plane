@@ -3,9 +3,11 @@ package controller
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	acceleratorv1alpha1 "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
+	"github.com/qcrs/accelerator-control-plane/internal/adapter"
 	"github.com/qcrs/accelerator-control-plane/internal/allocation"
 	"github.com/qcrs/accelerator-control-plane/internal/contracts"
 	corev1 "k8s.io/api/core/v1"
@@ -14,6 +16,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	utilvalidation "k8s.io/apimachinery/pkg/util/validation"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	controlleroptions "sigs.k8s.io/controller-runtime/pkg/controller"
@@ -33,6 +37,9 @@ const (
 
 	decisionPolicyAnnotation = "accelerator.qcrs.io/decision-policy"
 	decisionReasonAnnotation = "accelerator.qcrs.io/decision-reason"
+	workloadNameAnnotation   = "accelerator.qcrs.io/workload-name"
+	workloadNameLabel        = "accelerator.qcrs.io/workload"
+	workloadUIDLabel         = "accelerator.qcrs.io/workload-uid"
 
 	defaultReservationTTL        = 5 * time.Minute
 	unschedulableRetry           = 15 * time.Second
@@ -45,9 +52,9 @@ type WorkloadReconciler struct {
 
 	Inventory contracts.InventoryReader
 	Policy    contracts.PolicyEngine
-	Allocator contracts.Allocator
-	Providers *contracts.ProviderRegistry
+	Adapters  *adapter.Registry
 	Injector  contracts.PodInjector
+	Recorder  record.EventRecorder
 	Now       func() time.Time
 }
 
@@ -92,6 +99,9 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, request ctrl.Request
 	}
 
 	if workload.Status.AllocationRef == "" {
+		if result, waiting := r.waitForFallback(workload); waiting {
+			return result, nil
+		}
 		return r.selectAndCreateLease(ctx, workload)
 	}
 
@@ -114,6 +124,10 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, request ctrl.Request
 
 	if allocation.IsExpired(lease, r.now()) {
 		return r.expireLease(ctx, workload, lease)
+	}
+	if failureForAttempt(workload, workload.Status.AllocationAttempt) != nil &&
+		lease.Status.Phase != acceleratorv1alpha1.AllocationPhaseReleased {
+		return r.continueStartupFailure(ctx, workload, lease)
 	}
 
 	switch lease.Status.Phase {
@@ -156,7 +170,7 @@ func (r *WorkloadReconciler) Reconcile(ctx context.Context, request ctrl.Request
 func (r *WorkloadReconciler) selectAndCreateLease(ctx context.Context, workload *acceleratorv1alpha1.AcceleratorWorkload) (ctrl.Result, error) {
 	attempt := workload.Status.AllocationAttempt + 1
 	existing := &acceleratorv1alpha1.AcceleratorLease{}
-	existingKey := types.NamespacedName{Namespace: workload.Namespace, Name: leaseName(workload.Name, attempt)}
+	existingKey := types.NamespacedName{Namespace: workload.Namespace, Name: leaseName(workload.Name, string(workload.UID), attempt)}
 	if err := r.Get(ctx, existingKey, existing); err == nil {
 		return r.restoreLeaseSelection(ctx, workload, existing, attempt)
 	} else if !apierrors.IsNotFound(err) {
@@ -168,6 +182,7 @@ func (r *WorkloadReconciler) selectAndCreateLease(ctx context.Context, workload 
 		Placement:   workload.Spec.Placement,
 		PodTemplate: workload.Spec.PodTemplate,
 	}
+	selectionRequest.PreferredMode, selectionRequest.Exclusions = fallbackSelectionContext(workload)
 	candidates, err := r.Inventory.ListCandidates(ctx, selectionRequest)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -182,9 +197,12 @@ func (r *WorkloadReconciler) selectAndCreateLease(ctx context.Context, workload 
 		return ctrl.Result{}, err
 	}
 
-	providerObject, pool, provider, err := r.resolveProvider(ctx, decision.ProviderName, decision.PoolName)
+	providerObject, pool, provider, _, err := r.resolveExecution(ctx, decision.ProviderName, decision.PoolName)
 	if err != nil {
 		return ctrl.Result{}, err
+	}
+	if pool.Spec.Location != decision.Mode {
+		return ctrl.Result{}, contracts.NewError(contracts.ErrorKindConflict, "select execution adapter", fmt.Sprintf("pool %q location %q does not match decision mode %q", pool.Name, pool.Spec.Location, decision.Mode))
 	}
 	if err := provider.Validate(providerObject, pool); err != nil {
 		if isPermanentConfigurationError(err) {
@@ -201,16 +219,15 @@ func (r *WorkloadReconciler) selectAndCreateLease(ctx context.Context, workload 
 	}
 	lease := &acceleratorv1alpha1.AcceleratorLease{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       leaseName(workload.Name, attempt),
+			Name:       leaseName(workload.Name, string(workload.UID), attempt),
 			Namespace:  workload.Namespace,
 			Finalizers: []string{LeaseFinalizer},
 			Annotations: map[string]string{
 				decisionPolicyAnnotation: decision.Policy,
 				decisionReasonAnnotation: decision.Reason,
+				workloadNameAnnotation:   workload.Name,
 			},
-			Labels: map[string]string{
-				"accelerator.qcrs.io/workload": workload.Name,
-			},
+			Labels: workloadIdentityLabels(workload),
 		},
 		Spec: acceleratorv1alpha1.AcceleratorLeaseSpec{
 			Owner: corev1.ObjectReference{
@@ -222,6 +239,7 @@ func (r *WorkloadReconciler) selectAndCreateLease(ctx context.Context, workload 
 			},
 			WorkloadGeneration: workload.Generation,
 			Request:            workload.Spec.Accelerator,
+			Driver:             providerObject.Spec.Driver,
 			ProviderRef:        acceleratorv1alpha1.ClusterObjectReference{Name: decision.ProviderName},
 			PoolRef:            acceleratorv1alpha1.ClusterObjectReference{Name: decision.PoolName},
 			Mode:               decision.Mode,
@@ -299,13 +317,30 @@ func (r *WorkloadReconciler) recordLeaseSelection(
 		Reason:      reason,
 		DecidedAt:   metav1.NewTime(decidedAt),
 	}
+	workload.Status.Fallback.RequeueAt = nil
+	workload.Status.Fallback.StartupStartedAt = nil
 	setCondition(&workload.Status.Conditions, workload.Generation, ConditionSelected, metav1.ConditionTrue, "Selected", reason, r.now())
-	return ctrl.Result{Requeue: true}, r.updateWorkloadStatus(ctx, workload)
+	if err := r.updateWorkloadStatus(ctx, workload); err != nil {
+		return ctrl.Result{}, err
+	}
+	eventReason := "Selected"
+	if workload.Status.Fallback.FailedAttempts > 0 {
+		eventReason = "FallbackSelected"
+	}
+	r.eventNormal(workload, eventReason, "attempt %d selected %s mode using lease %s: %s", attempt, lease.Spec.Mode, lease.Name, reason)
+	return ctrl.Result{Requeue: true}, nil
 }
 
 func (r *WorkloadReconciler) reserveLease(ctx context.Context, workload *acceleratorv1alpha1.AcceleratorWorkload, lease *acceleratorv1alpha1.AcceleratorLease) (ctrl.Result, error) {
 	request := reservationRequest(workload, lease)
-	reservation, err := r.Allocator.Reserve(ctx, request)
+	allocator, err := r.allocatorForActiveLease(ctx, lease)
+	if err != nil {
+		if isPermanentConfigurationError(err) || apierrors.IsNotFound(err) {
+			return r.failReservationBeforeAcquisition(ctx, workload, lease, "ReservationConfigurationUnavailable", err)
+		}
+		return ctrl.Result{}, err
+	}
+	reservation, err := allocator.Reserve(ctx, request)
 	if err != nil {
 		reason := ""
 		switch {
@@ -315,6 +350,16 @@ func (r *WorkloadReconciler) reserveLease(ctx context.Context, workload *acceler
 			reason = "ReservationRejected"
 		}
 		if reason != "" {
+			fallbackEnabled, _, _, _ := fallbackSettings(workload)
+			if fallbackEnabled && !podWasReady(workload) &&
+				(contracts.IsErrorKind(err, contracts.ErrorKindConflict) || contracts.IsErrorKind(err, contracts.ErrorKindUnschedulable)) {
+				setCondition(&lease.Status.Conditions, lease.Generation, ConditionReserved, metav1.ConditionFalse, reason, err.Error(), r.now())
+				if updateErr := r.updateLeaseStatus(ctx, lease); updateErr != nil {
+					return ctrl.Result{}, updateErr
+				}
+				setCondition(&workload.Status.Conditions, workload.Generation, ConditionReserved, metav1.ConditionFalse, reason, err.Error(), r.now())
+				return r.handlePrePodStartupFailure(ctx, workload, lease, startupFailure{Reason: reason, Message: err.Error()})
+			}
 			if transitionErr := allocation.Transition(lease, acceleratorv1alpha1.AllocationPhaseFailed); transitionErr != nil {
 				return ctrl.Result{}, transitionErr
 			}
@@ -350,20 +395,77 @@ func (r *WorkloadReconciler) reserveLease(ctx context.Context, workload *acceler
 	if err := r.updateLeaseStatus(ctx, lease); err != nil {
 		return ctrl.Result{}, err
 	}
-	return ctrl.Result{Requeue: true}, r.updateWorkloadStatus(ctx, workload)
+	if err := r.updateWorkloadStatus(ctx, workload); err != nil {
+		return ctrl.Result{}, err
+	}
+	r.eventNormal(workload, "Reserved", "lease %s reserved %d %s device(s) in pool %s", lease.Name, lease.Spec.Request.Count, lease.Spec.Request.DeviceType, lease.Spec.PoolRef.Name)
+	return ctrl.Result{Requeue: true}, nil
+}
+
+func (r *WorkloadReconciler) failReservationBeforeAcquisition(
+	ctx context.Context,
+	workload *acceleratorv1alpha1.AcceleratorWorkload,
+	lease *acceleratorv1alpha1.AcceleratorLease,
+	reason string,
+	cause error,
+) (ctrl.Result, error) {
+	if err := allocation.Transition(lease, acceleratorv1alpha1.AllocationPhaseFailed); err != nil {
+		return ctrl.Result{}, err
+	}
+	setCondition(&lease.Status.Conditions, lease.Generation, ConditionReserved, metav1.ConditionFalse, reason, cause.Error(), r.now())
+	if err := r.updateLeaseStatus(ctx, lease); err != nil {
+		return ctrl.Result{}, err
+	}
+	// Active-lease resolution failed before Allocator.Reserve was invoked, so
+	// there is no ownership to release. Removing the finalizer here also avoids
+	// depending on configuration that has already disappeared.
+	if err := r.removeLeaseFinalizer(ctx, lease); err != nil {
+		return ctrl.Result{}, err
+	}
+	workload.Status.AllocationRef = ""
+	workload.Status.Phase = acceleratorv1alpha1.WorkloadPhasePending
+	setCondition(&workload.Status.Conditions, workload.Generation, ConditionReserved, metav1.ConditionFalse, reason, cause.Error(), r.now())
+	return ctrl.Result{RequeueAfter: time.Second}, r.updateWorkloadStatus(ctx, workload)
 }
 
 func (r *WorkloadReconciler) ensurePod(ctx context.Context, workload *acceleratorv1alpha1.AcceleratorWorkload, lease *acceleratorv1alpha1.AcceleratorLease) (ctrl.Result, error) {
-	providerObject, pool, provider, err := r.resolveProvider(ctx, lease.Spec.ProviderRef.Name, lease.Spec.PoolRef.Name)
+	providerObject, pool, provider, allocator, err := r.resolveExecution(ctx, lease.Spec.ProviderRef.Name, lease.Spec.PoolRef.Name)
 	if err != nil {
+		if isPermanentConfigurationError(err) || apierrors.IsNotFound(err) {
+			return r.failRuntimePreparation(ctx, workload, lease, "ExecutionConfigurationUnavailable", err)
+		}
 		return ctrl.Result{}, err
+	}
+	if lease.Spec.Driver != "" && providerObject.Spec.Driver != lease.Spec.Driver {
+		err := contracts.NewError(
+			contracts.ErrorKindInvalid,
+			"resolve allocation execution adapter",
+			fmt.Sprintf("provider driver %q no longer matches Lease driver %q", providerObject.Spec.Driver, lease.Spec.Driver),
+		)
+		return r.failRuntimePreparation(ctx, workload, lease, "ExecutionDriverChanged", err)
 	}
 	plan, err := provider.BuildRuntimePlan(ctx, providerObject, pool, lease)
 	if err != nil {
+		fallbackEnabled, _, _, _ := fallbackSettings(workload)
+		if fallbackEnabled && !podWasReady(workload) &&
+			(contracts.IsErrorKind(err, contracts.ErrorKindConflict) || contracts.IsErrorKind(err, contracts.ErrorKindUnschedulable)) {
+			setCondition(&lease.Status.Conditions, lease.Generation, ConditionRuntimeReady, metav1.ConditionFalse, "RuntimePreparationFailed", err.Error(), r.now())
+			if updateErr := r.updateLeaseStatus(ctx, lease); updateErr != nil {
+				return ctrl.Result{}, updateErr
+			}
+			return r.handlePrePodStartupFailure(ctx, workload, lease, startupFailure{Reason: "RuntimePreparationFailed", Message: err.Error()})
+		}
 		if isPermanentConfigurationError(err) {
 			return r.failRuntimePreparation(ctx, workload, lease, "RuntimePlanRejected", err)
 		}
 		return ctrl.Result{}, err
+	}
+	managedResources, err := r.managedResources(ctx)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := validateRuntimePlan(plan, lease, managedResources); err != nil {
+		return r.failRuntimePreparation(ctx, workload, lease, "RuntimePlanRejected", err)
 	}
 	mutatedTemplate, err := r.Injector.Mutate(workload.Spec.PodTemplate, plan)
 	if err != nil {
@@ -376,10 +478,16 @@ func (r *WorkloadReconciler) ensurePod(ctx context.Context, workload *accelerato
 	if err := controllerutil.SetControllerReference(workload, pod, r.Scheme); err != nil {
 		return ctrl.Result{}, err
 	}
+	created := false
 	if err := r.Create(ctx, pod); err != nil {
 		if !apierrors.IsAlreadyExists(err) {
-			if releaseErr := r.releaseLease(ctx, lease); releaseErr != nil {
-				return ctrl.Result{}, fmt.Errorf("create pod: %w; release reservation: %v", err, releaseErr)
+			// Timeouts and transport errors have an unknown commit result: the
+			// Pod may already exist even though the response was lost. Keep the
+			// reservation and retry the deterministic name. A later AlreadyExists
+			// response will restore the bind safely. Only errors that prove the
+			// API server rejected the object may release capacity immediately.
+			if isPermanentPodCreateError(err) {
+				return r.failRuntimePreparation(ctx, workload, lease, "PodCreateRejected", err)
 			}
 			return ctrl.Result{}, err
 		}
@@ -390,10 +498,12 @@ func (r *WorkloadReconciler) ensurePod(ctx context.Context, workload *accelerato
 			conflictErr := contracts.NewError(contracts.ErrorKindInvalid, "create workload pod", fmt.Sprintf("pod %s/%s conflicts with accelerator workload", pod.Namespace, pod.Name))
 			return r.failRuntimePreparation(ctx, workload, lease, "PodNameConflict", conflictErr)
 		}
+	} else {
+		created = true
 	}
 
 	podRef := objectReferenceForPod(pod)
-	if err := r.Allocator.Bind(ctx, reservationRequest(workload, lease), *podRef); err != nil {
+	if err := allocator.Bind(ctx, reservationRequest(workload, lease), *podRef); err != nil {
 		return ctrl.Result{}, err
 	}
 	if err := allocation.Transition(lease, acceleratorv1alpha1.AllocationPhaseBound); err != nil {
@@ -401,13 +511,28 @@ func (r *WorkloadReconciler) ensurePod(ctx context.Context, workload *accelerato
 	}
 	lease.Status.PodRef = podRef
 	lease.Status.ExpiresAt = nil
+	setCondition(&lease.Status.Conditions, lease.Generation, ConditionRuntimeReady, metav1.ConditionTrue, "Materialized", "runtime configuration was injected and the workload Pod was created", r.now())
 	if err := r.updateLeaseStatus(ctx, lease); err != nil {
 		return ctrl.Result{}, err
 	}
 	workload.Status.Phase = acceleratorv1alpha1.WorkloadPhaseStarting
 	workload.Status.PodRef = podRef
+	startedAt := pod.CreationTimestamp.Time
+	if startedAt.IsZero() {
+		startedAt = r.now()
+	}
+	startupStartedAt := metav1.NewTime(startedAt)
+	workload.Status.Fallback.StartupStartedAt = &startupStartedAt
+	setCondition(&workload.Status.Conditions, workload.Generation, ConditionRuntimeReady, metav1.ConditionTrue, "Materialized", "runtime configuration was injected and the workload Pod was created", r.now())
 	setCondition(&workload.Status.Conditions, workload.Generation, ConditionPodReady, metav1.ConditionFalse, "Starting", "pod was created and is not ready yet", r.now())
-	return ctrl.Result{Requeue: true}, r.updateWorkloadStatus(ctx, workload)
+	if err := r.updateWorkloadStatus(ctx, workload); err != nil {
+		return ctrl.Result{}, err
+	}
+	if created {
+		r.eventNormal(workload, "PodCreated", "created Pod %s for lease %s", pod.Name, lease.Name)
+	}
+	r.eventNormal(workload, "Bound", "bound lease %s to Pod %s", lease.Name, pod.Name)
+	return ctrl.Result{Requeue: true}, nil
 }
 
 func (r *WorkloadReconciler) syncBoundPod(ctx context.Context, workload *acceleratorv1alpha1.AcceleratorWorkload, lease *acceleratorv1alpha1.AcceleratorLease) (ctrl.Result, error) {
@@ -420,6 +545,9 @@ func (r *WorkloadReconciler) syncBoundPod(ctx context.Context, workload *acceler
 		if !apierrors.IsNotFound(err) {
 			return ctrl.Result{}, err
 		}
+		if failureForAttempt(workload, workload.Status.AllocationAttempt) != nil {
+			return r.continueStartupFailure(ctx, workload, lease)
+		}
 		if err := r.releaseLease(ctx, lease); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -429,7 +557,16 @@ func (r *WorkloadReconciler) syncBoundPod(ctx context.Context, workload *acceler
 	}
 
 	workload.Status.PodRef = objectReferenceForPod(pod)
+	wasReady := podWasReady(workload)
+	currentlyReady := podReady(pod)
+	fallbackEnabled, _, startupTimeout, _ := fallbackSettings(workload)
+	startedAt := startupStartedAt(workload, pod, r.now())
+	if workload.Status.Fallback.StartupStartedAt == nil && !wasReady {
+		value := metav1.NewTime(startedAt)
+		workload.Status.Fallback.StartupStartedAt = &value
+	}
 	if lease.Spec.Mode == acceleratorv1alpha1.ExecutionModeRemote {
+		wasDegraded := meta.IsStatusConditionTrue(workload.Status.Conditions, ConditionDegraded)
 		healthy, message, err := r.remoteTargetsHealthy(ctx, lease)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -438,20 +575,42 @@ func (r *WorkloadReconciler) syncBoundPod(ctx context.Context, workload *acceler
 			setCondition(&workload.Status.Conditions, workload.Generation, ConditionDegraded, metav1.ConditionFalse, "EndpointsHealthy", message, r.now())
 		} else {
 			setCondition(&workload.Status.Conditions, workload.Generation, ConditionDegraded, metav1.ConditionTrue, "EndpointUnavailable", message, r.now())
+			if fallbackEnabled && !wasReady && !currentlyReady {
+				return r.handleStartupFailure(ctx, workload, lease, pod, startupFailure{Reason: "EndpointUnavailable", Message: message})
+			}
+			if !wasDegraded {
+				r.eventWarning(workload, "Degraded", "%s", message)
+			}
+		}
+	}
+	if fallbackEnabled && !wasReady && !currentlyReady {
+		if failure, failed := detectStartupFailure(pod, startedAt, r.now(), startupTimeout); failed {
+			return r.handleStartupFailure(ctx, workload, lease, pod, failure)
 		}
 	}
 	result := ctrl.Result{}
 	switch pod.Status.Phase {
 	case corev1.PodRunning:
-		workload.Status.Phase = acceleratorv1alpha1.WorkloadPhaseRunning
 		ready := podReady(pod)
 		status := metav1.ConditionFalse
 		reason := "ContainersNotReady"
 		message := "pod is running but not all containers are ready"
 		if ready {
+			workload.Status.Phase = acceleratorv1alpha1.WorkloadPhaseRunning
+			workload.Status.Fallback.StartupStartedAt = nil
+			workload.Status.Fallback.ReadyObserved = true
 			status = metav1.ConditionTrue
 			reason = "Ready"
 			message = "pod is running and ready"
+		} else if wasReady {
+			// ReadyObserved is a monotonic S2 boundary. Once crossed, temporary
+			// readiness loss is degradation of a running attempt, not a return to
+			// its initial startup state.
+			workload.Status.Phase = acceleratorv1alpha1.WorkloadPhaseRunning
+			reason = "PreviouslyReady"
+			message = "pod reached Ready previously but is not currently ready"
+		} else {
+			workload.Status.Phase = acceleratorv1alpha1.WorkloadPhaseStarting
 		}
 		setCondition(&workload.Status.Conditions, workload.Generation, ConditionPodReady, status, reason, message, r.now())
 	case corev1.PodSucceeded, corev1.PodFailed:
@@ -468,11 +627,22 @@ func (r *WorkloadReconciler) syncBoundPod(ctx context.Context, workload *acceler
 		workload.Status.Phase = acceleratorv1alpha1.WorkloadPhaseStarting
 		setCondition(&workload.Status.Conditions, workload.Generation, ConditionPodReady, metav1.ConditionFalse, "Starting", fmt.Sprintf("pod phase is %s", pod.Status.Phase), r.now())
 	}
+	if fallbackEnabled && !wasReady && workload.Status.Phase == acceleratorv1alpha1.WorkloadPhaseStarting {
+		result = startupDeadlineResult(startedAt, r.now(), startupTimeout, result)
+	}
 	if lease.Spec.Mode == acceleratorv1alpha1.ExecutionModeRemote &&
 		pod.Status.Phase != corev1.PodSucceeded && pod.Status.Phase != corev1.PodFailed {
-		result.RequeueAfter = defaultEndpointCheckInterval
+		if result.RequeueAfter == 0 || defaultEndpointCheckInterval < result.RequeueAfter {
+			result.RequeueAfter = defaultEndpointCheckInterval
+		}
 	}
-	return result, r.updateWorkloadStatus(ctx, workload)
+	if err := r.updateWorkloadStatus(ctx, workload); err != nil {
+		return ctrl.Result{}, err
+	}
+	if !wasReady && podReady(pod) {
+		r.eventNormal(workload, "Ready", "Pod %s became Ready in %s mode", pod.Name, lease.Spec.Mode)
+	}
+	return result, nil
 }
 
 func (r *WorkloadReconciler) syncTerminalStatus(
@@ -482,6 +652,9 @@ func (r *WorkloadReconciler) syncTerminalStatus(
 ) (ctrl.Result, error) {
 	if workload.Status.Phase == acceleratorv1alpha1.WorkloadPhaseSucceeded || workload.Status.Phase == acceleratorv1alpha1.WorkloadPhaseFailed {
 		return ctrl.Result{}, nil
+	}
+	if failureForAttempt(workload, workload.Status.AllocationAttempt) != nil {
+		return r.continueStartupFailure(ctx, workload, lease)
 	}
 	if workload.Status.PodRef == nil {
 		workload.Status.Phase = acceleratorv1alpha1.WorkloadPhaseFailed
@@ -533,6 +706,14 @@ func isPermanentConfigurationError(err error) bool {
 		contracts.IsErrorKind(err, contracts.ErrorKindUnsupported)
 }
 
+func isPermanentPodCreateError(err error) bool {
+	return apierrors.IsInvalid(err) ||
+		apierrors.IsBadRequest(err) ||
+		apierrors.IsForbidden(err) ||
+		apierrors.IsUnauthorized(err) ||
+		apierrors.IsMethodNotSupported(err)
+}
+
 func (r *WorkloadReconciler) expireLease(ctx context.Context, workload *acceleratorv1alpha1.AcceleratorWorkload, lease *acceleratorv1alpha1.AcceleratorLease) (ctrl.Result, error) {
 	pod := &corev1.Pod{}
 	podKey := types.NamespacedName{Namespace: workload.Namespace, Name: podName(workload.Name, string(workload.UID))}
@@ -549,7 +730,11 @@ func (r *WorkloadReconciler) expireLease(ctx context.Context, workload *accelera
 		return ctrl.Result{}, err
 	}
 
-	if err := r.Allocator.Release(ctx, reservationRequest(workload, lease)); err != nil {
+	allocator, err := r.allocatorForRelease(ctx, lease)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if err := allocator.Release(ctx, reservationRequest(workload, lease)); err != nil {
 		return ctrl.Result{}, err
 	}
 	if err := allocation.Transition(lease, acceleratorv1alpha1.AllocationPhaseExpired); err != nil {
@@ -649,6 +834,15 @@ func (r *WorkloadReconciler) releaseLease(ctx context.Context, lease *accelerato
 	if lease.Status.Phase == acceleratorv1alpha1.AllocationPhaseReleased {
 		return r.removeLeaseFinalizer(ctx, lease)
 	}
+	if (lease.Status.Phase == acceleratorv1alpha1.AllocationPhaseFailed ||
+		lease.Status.Phase == acceleratorv1alpha1.AllocationPhaseExpired) &&
+		!controllerutil.ContainsFinalizer(lease, LeaseFinalizer) {
+		// A terminal Lease without the release finalizer has already completed
+		// its ownership cleanup (or never acquired capacity). Releasing it again
+		// can conflict with a newer holder of the same Endpoint and wedge the
+		// owning Workload finalizer.
+		return nil
+	}
 	request := reservationRequestFromLease(lease)
 	if lease.Status.Phase != acceleratorv1alpha1.AllocationPhaseReleasing &&
 		lease.Status.Phase != acceleratorv1alpha1.AllocationPhaseFailed &&
@@ -660,7 +854,11 @@ func (r *WorkloadReconciler) releaseLease(ctx context.Context, lease *accelerato
 			return err
 		}
 	}
-	if err := r.Allocator.Release(ctx, request); err != nil {
+	allocator, err := r.allocatorForRelease(ctx, lease)
+	if err != nil {
+		return err
+	}
+	if err := allocator.Release(ctx, request); err != nil {
 		return err
 	}
 	if lease.Status.Phase == acceleratorv1alpha1.AllocationPhaseReleasing {
@@ -671,6 +869,7 @@ func (r *WorkloadReconciler) releaseLease(ctx context.Context, lease *accelerato
 		if err := r.updateLeaseStatus(ctx, lease); err != nil {
 			return err
 		}
+		r.eventNormal(lease, "Released", "released accelerator capacity for pool %s", lease.Spec.PoolRef.Name)
 	}
 	return r.removeLeaseFinalizer(ctx, lease)
 }
@@ -697,14 +896,12 @@ func (r *WorkloadReconciler) finalizeWorkload(ctx context.Context, workload *acc
 		return ctrl.Result{}, err
 	}
 
-	leases := &acceleratorv1alpha1.AcceleratorLeaseList{}
-	if err := r.List(ctx, leases, client.InNamespace(workload.Namespace), client.MatchingLabels{
-		"accelerator.qcrs.io/workload": workload.Name,
-	}); err != nil {
+	leases, err := r.listWorkloadLeases(ctx, workload)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
-	for index := range leases.Items {
-		lease := &leases.Items[index]
+	for index := range leases {
+		lease := &leases[index]
 		if lease.Spec.Owner.UID != workload.UID {
 			continue
 		}
@@ -728,8 +925,21 @@ func (r *WorkloadReconciler) remoteTargetsHealthy(ctx context.Context, lease *ac
 		if endpoint.Spec.Unschedulable {
 			return false, fmt.Sprintf("endpoint %s is unschedulable", target.EndpointName), nil
 		}
-		if condition := meta.FindStatusCondition(endpoint.Status.Conditions, "Ready"); condition != nil && condition.Status != metav1.ConditionTrue {
-			return false, fmt.Sprintf("endpoint %s Ready condition is %s: %s", target.EndpointName, condition.Status, condition.Message), nil
+		if condition := meta.FindStatusCondition(endpoint.Status.Conditions, ConditionConfigured); condition != nil {
+			if condition.ObservedGeneration != endpoint.Generation {
+				return false, fmt.Sprintf("endpoint %s Configured condition is stale for generation %d", target.EndpointName, endpoint.Generation), nil
+			}
+			if condition.Status != metav1.ConditionTrue {
+				return false, fmt.Sprintf("endpoint %s Configured condition is %s: %s", target.EndpointName, condition.Status, condition.Message), nil
+			}
+		}
+		if condition := meta.FindStatusCondition(endpoint.Status.Conditions, "Ready"); condition != nil {
+			if condition.ObservedGeneration != endpoint.Generation {
+				return false, fmt.Sprintf("endpoint %s Ready condition is stale for generation %d", target.EndpointName, endpoint.Generation), nil
+			}
+			if condition.Status != metav1.ConditionTrue {
+				return false, fmt.Sprintf("endpoint %s Ready condition is %s: %s", target.EndpointName, condition.Status, condition.Message), nil
+			}
 		}
 		binding, found := boundEndpoint(lease.Status.Binding.Endpoints, target.EndpointName)
 		if !found {
@@ -802,11 +1012,82 @@ func (r *WorkloadReconciler) resolveProvider(
 	if pool.Spec.ProviderRef.Name != providerName {
 		return nil, nil, nil, fmt.Errorf("pool %q references provider %q instead of %q", poolName, pool.Spec.ProviderRef.Name, providerName)
 	}
-	provider, err := r.Providers.Get(providerObject.Spec.Driver)
+	execution, err := r.Adapters.Get(providerObject.Spec.Driver)
 	if err != nil {
 		return nil, nil, nil, err
 	}
+	provider := execution.Provider()
+	if provider == nil {
+		return nil, nil, nil, contracts.NewError(contracts.ErrorKindInvalid, "resolve execution adapter", fmt.Sprintf("driver %q returned no provider", providerObject.Spec.Driver))
+	}
 	return providerObject, pool, provider, nil
+}
+
+// resolveExecution resolves the Kubernetes configuration and then selects the
+// registered execution adapter for the provider driver. Keeping this lookup in
+// one place prevents the reservation path and the runtime-materialization path
+// from accidentally using different implementations.
+func (r *WorkloadReconciler) resolveExecution(
+	ctx context.Context,
+	providerName,
+	poolName string,
+) (*acceleratorv1alpha1.AcceleratorProvider, *acceleratorv1alpha1.AcceleratorPool, contracts.Provider, contracts.Allocator, error) {
+	providerObject, pool, provider, err := r.resolveProvider(ctx, providerName, poolName)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	execution, err := r.Adapters.Get(providerObject.Spec.Driver)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	runtimeProvider := execution.Provider()
+	allocator := execution.Allocator()
+	if runtimeProvider == nil || allocator == nil {
+		return nil, nil, nil, nil, contracts.NewError(contracts.ErrorKindInvalid, "resolve execution adapter", fmt.Sprintf("driver %q returned an incomplete adapter", providerObject.Spec.Driver))
+	}
+	if runtimeProvider.Driver() != provider.Driver() {
+		return nil, nil, nil, nil, contracts.NewError(contracts.ErrorKindConflict, "resolve execution adapter", fmt.Sprintf("adapter driver %q does not match provider driver %q", runtimeProvider.Driver(), provider.Driver()))
+	}
+	return providerObject, pool, runtimeProvider, allocator, nil
+}
+
+func (r *WorkloadReconciler) allocatorForActiveLease(ctx context.Context, lease *acceleratorv1alpha1.AcceleratorLease) (contracts.Allocator, error) {
+	if lease == nil {
+		return nil, contracts.NewError(contracts.ErrorKindInvalid, "resolve execution allocator", "allocation Lease is required")
+	}
+	providerObject, _, _, allocator, err := r.resolveExecution(ctx, lease.Spec.ProviderRef.Name, lease.Spec.PoolRef.Name)
+	if err != nil {
+		return nil, err
+	}
+	if lease.Spec.Driver != "" && providerObject.Spec.Driver != lease.Spec.Driver {
+		return nil, contracts.NewError(
+			contracts.ErrorKindInvalid,
+			"resolve execution allocator",
+			fmt.Sprintf("provider driver %q no longer matches Lease driver %q", providerObject.Spec.Driver, lease.Spec.Driver),
+		)
+	}
+	return allocator, nil
+}
+
+func (r *WorkloadReconciler) allocatorForRelease(ctx context.Context, lease *acceleratorv1alpha1.AcceleratorLease) (contracts.Allocator, error) {
+	if lease == nil {
+		return nil, contracts.NewError(contracts.ErrorKindInvalid, "resolve release allocator", "allocation Lease is required")
+	}
+	if lease.Spec.Driver != "" {
+		execution, err := r.Adapters.Get(lease.Spec.Driver)
+		if err != nil {
+			return nil, err
+		}
+		allocator := execution.Allocator()
+		if allocator == nil {
+			return nil, contracts.NewError(contracts.ErrorKindInvalid, "resolve release allocator", fmt.Sprintf("driver %q returned no allocator", lease.Spec.Driver))
+		}
+		return allocator, nil
+	}
+	// Backward compatibility for Leases created before spec.driver existed.
+	// New Leases never take this path.
+	_, _, _, allocator, err := r.resolveExecution(ctx, lease.Spec.ProviderRef.Name, lease.Spec.PoolRef.Name)
+	return allocator, err
 }
 
 func (r *WorkloadReconciler) managedResources(ctx context.Context) (map[corev1.ResourceName]struct{}, error) {
@@ -826,12 +1107,40 @@ func (r *WorkloadReconciler) managedResources(ctx context.Context) (map[corev1.R
 
 func (r *WorkloadReconciler) updateWorkloadStatus(ctx context.Context, workload *acceleratorv1alpha1.AcceleratorWorkload) error {
 	workload.Status.ObservedGeneration = workload.Generation
-	return r.Status().Update(ctx, workload)
+	current := &acceleratorv1alpha1.AcceleratorWorkload{}
+	if err := r.Get(ctx, client.ObjectKeyFromObject(workload), current); err != nil {
+		return err
+	}
+	if reflect.DeepEqual(current.Status, workload.Status) {
+		workload.ResourceVersion = current.ResourceVersion
+		return nil
+	}
+	before := current.DeepCopy()
+	current.Status = workload.Status
+	if err := r.Status().Patch(ctx, current, client.MergeFrom(before)); err != nil {
+		return err
+	}
+	workload.ResourceVersion = current.ResourceVersion
+	return nil
 }
 
 func (r *WorkloadReconciler) updateLeaseStatus(ctx context.Context, lease *acceleratorv1alpha1.AcceleratorLease) error {
 	lease.Status.ObservedGeneration = lease.Generation
-	return r.Status().Update(ctx, lease)
+	current := &acceleratorv1alpha1.AcceleratorLease{}
+	if err := r.Get(ctx, client.ObjectKeyFromObject(lease), current); err != nil {
+		return err
+	}
+	if reflect.DeepEqual(current.Status, lease.Status) {
+		lease.ResourceVersion = current.ResourceVersion
+		return nil
+	}
+	before := current.DeepCopy()
+	current.Status = lease.Status
+	if err := r.Status().Patch(ctx, current, client.MergeFrom(before)); err != nil {
+		return err
+	}
+	lease.ResourceVersion = current.ResourceVersion
+	return nil
 }
 
 func (r *WorkloadReconciler) removeLeaseFinalizer(ctx context.Context, lease *acceleratorv1alpha1.AcceleratorLease) error {
@@ -844,7 +1153,7 @@ func (r *WorkloadReconciler) removeLeaseFinalizer(ctx context.Context, lease *ac
 
 func (r *WorkloadReconciler) validateDependencies() error {
 	if r.Client == nil || r.Scheme == nil || r.Inventory == nil || r.Policy == nil ||
-		r.Allocator == nil || r.Providers == nil || r.Injector == nil {
+		r.Adapters == nil || r.Injector == nil {
 		return fmt.Errorf("workload reconciler dependencies are incomplete")
 	}
 	return nil
@@ -875,15 +1184,24 @@ func reservationRequest(workload *acceleratorv1alpha1.AcceleratorWorkload, lease
 }
 
 func reservationRequestFromLease(lease *acceleratorv1alpha1.AcceleratorLease) contracts.ReservationRequest {
+	leaseKey := string(lease.UID)
+	if leaseKey == "" {
+		// controller-runtime's fake client does not assign API-server UIDs. The
+		// production path always uses UID; namespace/name keeps unit-level
+		// idempotence deterministic without weakening the live fencing token.
+		leaseKey = lease.Namespace + "/" + lease.Name
+	}
 	return contracts.ReservationRequest{
-		LeaseKey:     string(lease.UID),
-		WorkloadUID:  string(lease.Spec.Owner.UID),
-		ProviderName: lease.Spec.ProviderRef.Name,
-		PoolName:     lease.Spec.PoolRef.Name,
-		Mode:         lease.Spec.Mode,
-		Request:      lease.Spec.Request,
-		Targets:      lease.Spec.Targets,
-		TTL:          lease.Spec.TTL.Duration,
+		LeaseKey:       leaseKey,
+		LeaseNamespace: lease.Namespace,
+		LeaseName:      lease.Name,
+		WorkloadUID:    string(lease.Spec.Owner.UID),
+		ProviderName:   lease.Spec.ProviderRef.Name,
+		PoolName:       lease.Spec.PoolRef.Name,
+		Mode:           lease.Spec.Mode,
+		Request:        lease.Spec.Request,
+		Targets:        lease.Spec.Targets,
+		TTL:            lease.Spec.TTL.Duration,
 	}
 }
 
@@ -896,12 +1214,15 @@ func podFromTemplate(
 	if labels == nil {
 		labels = map[string]string{}
 	}
-	labels["accelerator.qcrs.io/workload"] = workload.Name
+	for key, value := range workloadIdentityLabels(workload) {
+		labels[key] = value
+	}
 	annotations := copyMap(template.Annotations)
 	if annotations == nil {
 		annotations = map[string]string{}
 	}
 	annotations["accelerator.qcrs.io/lease"] = lease.Name
+	annotations[workloadNameAnnotation] = workload.Name
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        podName(workload.Name, string(workload.UID)),
@@ -934,6 +1255,45 @@ func podReady(pod *corev1.Pod) bool {
 
 func workloadPhaseTerminal(phase acceleratorv1alpha1.WorkloadPhase) bool {
 	return phase == acceleratorv1alpha1.WorkloadPhaseSucceeded || phase == acceleratorv1alpha1.WorkloadPhaseFailed
+}
+
+func workloadIdentityLabels(workload *acceleratorv1alpha1.AcceleratorWorkload) map[string]string {
+	identity := string(workload.UID)
+	if identity == "" {
+		identity = identitySuffix(workload.Name, "")
+	}
+	result := map[string]string{workloadUIDLabel: identity}
+	if len(utilvalidation.IsValidLabelValue(workload.Name)) == 0 {
+		result[workloadNameLabel] = workload.Name
+	}
+	return result
+}
+
+func (r *WorkloadReconciler) listWorkloadLeases(ctx context.Context, workload *acceleratorv1alpha1.AcceleratorWorkload) ([]acceleratorv1alpha1.AcceleratorLease, error) {
+	byName := map[string]acceleratorv1alpha1.AcceleratorLease{}
+	current := &acceleratorv1alpha1.AcceleratorLeaseList{}
+	identity := workloadIdentityLabels(workload)[workloadUIDLabel]
+	if err := r.List(ctx, current, client.InNamespace(workload.Namespace), client.MatchingLabels{workloadUIDLabel: identity}); err != nil {
+		return nil, err
+	}
+	for index := range current.Items {
+		byName[current.Items[index].Name] = current.Items[index]
+	}
+	// Compatibility for Leases created before the UID label was introduced.
+	if len(utilvalidation.IsValidLabelValue(workload.Name)) == 0 {
+		legacy := &acceleratorv1alpha1.AcceleratorLeaseList{}
+		if err := r.List(ctx, legacy, client.InNamespace(workload.Namespace), client.MatchingLabels{workloadNameLabel: workload.Name}); err != nil {
+			return nil, err
+		}
+		for index := range legacy.Items {
+			byName[legacy.Items[index].Name] = legacy.Items[index]
+		}
+	}
+	result := make([]acceleratorv1alpha1.AcceleratorLease, 0, len(byName))
+	for _, lease := range byName {
+		result = append(result, lease)
+	}
+	return result, nil
 }
 
 func copyMap(source map[string]string) map[string]string {

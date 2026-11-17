@@ -17,6 +17,12 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: ["accelerator.qcrs.io"]
     resources:
+      - acceleratorproviders/status
+      - acceleratorpools/status
+      - acceleratorendpoints/status
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["accelerator.qcrs.io"]
+    resources:
       - acceleratorworkloads
       - acceleratorleases
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
@@ -48,6 +54,33 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
   name: accelerator-manager-role
+subjects:
+  - kind: ServiceAccount
+    name: accelerator-manager
+    namespace: accelerator-system
+---
+# Leader election and endpoint claims are deliberately confined to the
+# controller namespace. Remote endpoint claims use the same coordination API
+# but a distinct name prefix from the manager leader-election Lease.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: accelerator-manager-coordination
+  namespace: accelerator-system
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: accelerator-manager-coordination
+  namespace: accelerator-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: accelerator-manager-coordination
 subjects:
   - kind: ServiceAccount
     name: accelerator-manager

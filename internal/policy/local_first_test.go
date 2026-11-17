@@ -6,6 +6,7 @@ import (
 
 	acceleratorv1alpha1 "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
 	"github.com/qcrs/accelerator-control-plane/internal/contracts"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
@@ -62,6 +63,15 @@ func TestLocalFirstSelect(t *testing.T) {
 			wantErrorKind: contracts.ErrorKindUnschedulable,
 		},
 		{
+			name:    "exclusive endpoint cannot expose unrequested devices",
+			request: gpuRequest(1),
+			candidates: []contracts.Candidate{
+				exclusiveRemoteCandidate("remote", "endpoint-a", 10,
+					device("gpu-a", "24Gi"), device("gpu-b", "24Gi")),
+			},
+			wantErrorKind: contracts.ErrorKindUnschedulable,
+		},
+		{
 			name: "local memory must be known and sufficient",
 			request: contracts.SelectionRequest{
 				Accelerator: acceleratorv1alpha1.AcceleratorRequest{
@@ -102,6 +112,53 @@ func TestLocalFirstSelect(t *testing.T) {
 			},
 			wantErrorKind: contracts.ErrorKindUnschedulable,
 		},
+		{
+			name:    "Auto falls back to remote when local capacity is short",
+			request: gpuRequest(2),
+			candidates: []contracts.Candidate{
+				localCandidate("local", "node-a", 100, 1, "24Gi"),
+				remoteCandidate("remote", "endpoint-a", 1, device("gpu-a", "24Gi"), device("gpu-b", "24Gi")),
+			},
+			wantMode: acceleratorv1alpha1.ExecutionModeRemote, wantPool: "remote", wantTargets: 1,
+		},
+		{
+			name: "LocalOnly never selects remote when local capacity is short",
+			request: func() contracts.SelectionRequest {
+				request := gpuRequest(2)
+				request.Placement.Mode = acceleratorv1alpha1.PlacementModeLocalOnly
+				return request
+			}(),
+			candidates: []contracts.Candidate{
+				localCandidate("local", "node-a", 100, 1, "24Gi"),
+				remoteCandidate("remote", "endpoint-a", 1, device("gpu-a", "24Gi"), device("gpu-b", "24Gi")),
+			},
+			wantErrorKind: contracts.ErrorKindUnschedulable,
+		},
+		{
+			name: "RemoteOnly ignores an eligible local candidate",
+			request: func() contracts.SelectionRequest {
+				request := gpuRequest(1)
+				request.Placement.Mode = acceleratorv1alpha1.PlacementModeRemoteOnly
+				return request
+			}(),
+			candidates: []contracts.Candidate{
+				localCandidate("local", "node-a", 100, 2, "24Gi"),
+				remoteCandidate("remote", "endpoint-a", 1, device("gpu-a", "24Gi")),
+			},
+			wantMode: acceleratorv1alpha1.ExecutionModeRemote, wantPool: "remote", wantTargets: 1,
+		},
+		{
+			name: "resource form and profile prevent whole device and MIG units from mixing",
+			request: contracts.SelectionRequest{Accelerator: acceleratorv1alpha1.AcceleratorRequest{
+				DeviceType: acceleratorv1alpha1.DeviceKindGPU, Vendor: "nvidia", Count: 1,
+				ResourceForm: acceleratorv1alpha1.ResourceFormMIG, Profile: "1g.10gb",
+			}},
+			candidates: []contracts.Candidate{
+				localCandidate("whole", "node-a", 100, 1, "40Gi"),
+				localResourceCandidate("mig", "node-a", 10, 2, "10Gi", "nvidia.com/mig-1g.10gb", acceleratorv1alpha1.ResourceFormMIG, "1g.10gb"),
+			},
+			wantMode: acceleratorv1alpha1.ExecutionModeLocal, wantPool: "mig", wantTargets: 1,
+		},
 	}
 
 	engine := NewLocalFirst()
@@ -139,6 +196,25 @@ func TestLocalFirstRejectsDuplicateOrder(t *testing.T) {
 	}
 }
 
+func TestFailedTargetExclusionIsScopedToPool(t *testing.T) {
+	request := gpuRequest(1)
+	request.Exclusions = []contracts.CandidateExclusion{{
+		Mode:       acceleratorv1alpha1.ExecutionModeLocal,
+		PoolName:   "failed-pool",
+		TargetName: "node-a",
+	}}
+	decision, err := NewLocalFirst().Select(context.Background(), request, []contracts.Candidate{
+		localCandidate("failed-pool", "node-a", 100, 1, "24Gi"),
+		localCandidate("healthy-pool", "node-a", 10, 1, "24Gi"),
+	})
+	if err != nil {
+		t.Fatalf("Select returned error: %v", err)
+	}
+	if decision.PoolName != "healthy-pool" || len(decision.Targets) != 1 || decision.Targets[0].NodeName != "node-a" {
+		t.Fatalf("failure in one Pool excluded the same Node from another Pool: %#v", decision)
+	}
+}
+
 func gpuRequest(count int32) contracts.SelectionRequest {
 	return contracts.SelectionRequest{
 		Accelerator: acceleratorv1alpha1.AcceleratorRequest{
@@ -158,6 +234,8 @@ func localCandidate(pool, node string, priority, available int32, memory string)
 		Mode:         acceleratorv1alpha1.ExecutionModeLocal,
 		DeviceType:   acceleratorv1alpha1.DeviceKindGPU,
 		NodeName:     node,
+		ResourceName: "nvidia.com/gpu",
+		ResourceForm: acceleratorv1alpha1.ResourceFormWholeDevice,
 		Vendor:       "nvidia",
 		Available:    available,
 		Ready:        true,
@@ -165,6 +243,21 @@ func localCandidate(pool, node string, priority, available int32, memory string)
 	if memory != "" {
 		candidate.DeviceMemory = resource.MustParse(memory)
 	}
+	return candidate
+}
+
+func localResourceCandidate(
+	pool, node string,
+	priority, available int32,
+	memory string,
+	resourceName corev1.ResourceName,
+	form acceleratorv1alpha1.ResourceForm,
+	profile string,
+) contracts.Candidate {
+	candidate := localCandidate(pool, node, priority, available, memory)
+	candidate.ResourceName = resourceName
+	candidate.ResourceForm = form
+	candidate.Profile = profile
 	return candidate
 }
 
@@ -191,9 +284,10 @@ func exclusiveRemoteCandidate(pool, endpoint string, priority int32, devices ...
 
 func device(id, memory string) contracts.Device {
 	return contracts.Device{
-		ID:     id,
-		Vendor: "nvidia",
-		Model:  "A100",
-		Memory: resource.MustParse(memory),
+		ID:           id,
+		Vendor:       "nvidia",
+		Model:        "A100",
+		Memory:       resource.MustParse(memory),
+		ResourceForm: acceleratorv1alpha1.ResourceFormWholeDevice,
 	}
 }

@@ -11,8 +11,8 @@
   license. Cricket is MIT, but its complete dependency set is not
   "MIT-only".
 
-The upstream source is cloned next to this repository at
-`/home/qcrs/vGPU/cricket`. The original submodule host returned HTTP 403, so
+The upstream source is expected next to this repository under the vGPU
+workspace. The original submodule host returned HTTP 403, so
 the exact locked commit was obtained from the public
 `https://github.com/alisw/libtirpc.git` mirror. No upstream source was modified.
 
@@ -30,6 +30,10 @@ including at least:
 The image must also provide `/bin/cp` with support for `-a`; the generated init
 container uses it to materialize the runtime into the shared volume.
 
+`clientRuntime.runtimeVersion` is mandatory and must exactly match the bound
+Endpoint `runtime.version`. Pin both values to the same tested Cricket build;
+the controller rejects a mismatch before it creates the application Pod.
+
 The Provider copies that directory into an `emptyDir`, mounts it into the
 workload container, and injects:
 
@@ -37,11 +41,14 @@ workload container, and injects:
 REMOTE_GPU_ADDRESS=<bound endpoint address>
 CRICKET_RPCID=<optional endpoint rpcID>
 LD_PRELOAD=<mountPath>/cricket-client.so
-LD_LIBRARY_PATH=<mountPath>:<existing value>
+LD_LIBRARY_PATH=<mountPath>
 ```
 
-Existing `LD_PRELOAD` and `LD_LIBRARY_PATH` values are preserved after the
-managed Cricket paths.
+The Pod injector does not compose loader variables. A different existing
+`LD_PRELOAD` or `LD_LIBRARY_PATH` value is an explicit mutation conflict and
+the Pod is not created. This avoids silently changing library precedence or
+combining two runtime shims. Reapplying the exact same RuntimePlan remains
+idempotent.
 
 ## Server contract
 
@@ -81,6 +88,12 @@ spec:
       health: Healthy
 ```
 
+For the current static Cricket adapter, the Workload request count must equal
+the number of healthy devices in this list. If a host has multiple GPUs that
+must be allocated independently, run a separately restricted server process
+and declare a separate Endpoint for each independently allocatable group. The
+current scope does not implement MIG or per-client device slicing.
+
 Changing `CUDA_VISIBLE_DEVICES` or restarting the server with another RPC ID
 requires updating the Endpoint only for future allocations. Existing Leases
 retain their original binding snapshot.
@@ -90,6 +103,11 @@ addresses, mismatched `runtime.apiVersion`/`rpcID`, and client runtime paths
 that would be hidden by the init container's `/runtime` volume mount. The same
 validator runs while building inventory and again immediately before the
 binding snapshot is created.
+
+Immediately before resolving the snapshot, the allocator creates a hashed
+coordination Lease for the Endpoint. This API-server compare-and-swap prevents
+two workloads from acquiring the same static server even when controller
+caches are stale or leadership changes.
 
 ## Compatibility and security limits
 
@@ -104,5 +122,30 @@ binding snapshot is created.
 - A Kubernetes Service cannot directly model Cricket's default random RPC
   service port. Container-managed server deployment needs a separate fixed-port
   or host-network adapter and is outside this S1 implementation.
-- Endpoint health and inventory are declarations unless an independent
-  observer publishes the optional `Ready` condition.
+- The built-in controller publishes static Endpoint `Configured`; network
+  health remains declarative unless an independent observer publishes the
+  optional `Ready` condition and `lastProbeTime`. Any published condition must
+  carry the current Endpoint `observedGeneration`.
+
+## Validation layers
+
+The repository keeps the standalone data-plane smoke test and the platform
+container test separate because they diagnose different failure classes:
+
+1. The standalone CUDA/Cricket smoke test proves that the remote WSL server,
+   `rpcbind`, port forwarding, CUDA runtime, and Cricket client can execute a
+   kernel without involving Kubernetes.
+2. The platform test submits an `AcceleratorWorkload` and verifies Adapter
+   Registry selection, Provider/Allocator binding, Lease exclusivity, init
+   container runtime injection, CUDA image execution, CPU/GPU result checking,
+   and Lease release.
+
+The reproducible platform matrix is under
+[`examples/cricket-e2e/complex-demo/README.zh-CN.md`](../examples/cricket-e2e/complex-demo/README.zh-CN.md).
+It contains three nontrivial CUDA image jobs (multi-stage edge extraction,
+batch bilinear resize, and segmentation/morphology), plus optional `Auto` and
+`LocalOnly` workload variants. In the current kind + Windows/WSL RTX 5060 Ti
+environment, all three `RemoteOnly` jobs and the `Auto` job completed with
+`verification failures: 0`, `selectedMode: Remote`, and a `Released` Lease.
+The `LocalOnly` variant remains an opt-in test because the kind node has no
+local NVIDIA Device Plugin resource.

@@ -3,16 +3,22 @@ package inventory
 import (
 	acceleratorv1alpha1 "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 func RequestedOnNode(pods []corev1.Pod, nodeName string, resourceName corev1.ResourceName) int64 {
-	var requested int64
+	quantity := RequestedQuantityOnNode(pods, nodeName, resourceName)
+	return quantity.Value()
+}
+
+func RequestedQuantityOnNode(pods []corev1.Pod, nodeName string, resourceName corev1.ResourceName) resource.Quantity {
+	requested := *resource.NewQuantity(0, resource.DecimalSI)
 	for index := range pods {
 		pod := &pods[index]
 		if pod.Spec.NodeName != nodeName || podIsTerminal(pod) {
 			continue
 		}
-		requested += podRequest(pod, resourceName)
+		requested.Add(podRequestQuantity(pod, resourceName))
 	}
 	return requested
 }
@@ -20,33 +26,53 @@ func RequestedOnNode(pods []corev1.Pod, nodeName string, resourceName corev1.Res
 func ReservedOnNode(
 	leases []acceleratorv1alpha1.AcceleratorLease,
 	pods []corev1.Pod,
-	poolName,
+	poolResources map[string]corev1.ResourceName,
+	resourceName corev1.ResourceName,
 	nodeName string,
 ) int64 {
+	quantity := ReservedQuantityOnNode(leases, pods, poolResources, resourceName, nodeName)
+	return quantity.Value()
+}
+
+func ReservedQuantityOnNode(
+	leases []acceleratorv1alpha1.AcceleratorLease,
+	pods []corev1.Pod,
+	poolResources map[string]corev1.ResourceName,
+	resourceName corev1.ResourceName,
+	nodeName string,
+) resource.Quantity {
 	podsByUID := make(map[string]*corev1.Pod, len(pods))
 	for index := range pods {
 		pod := &pods[index]
 		podsByUID[string(pod.UID)] = pod
 	}
 
-	var reserved int64
+	reserved := *resource.NewQuantity(0, resource.DecimalSI)
 	for index := range leases {
 		lease := &leases[index]
 		if !leaseConsumesCapacity(lease) ||
-			lease.Spec.Mode != acceleratorv1alpha1.ExecutionModeLocal ||
-			lease.Spec.PoolRef.Name != poolName {
+			lease.Spec.Mode != acceleratorv1alpha1.ExecutionModeLocal {
 			continue
 		}
-		if lease.Status.PodRef != nil {
-			if pod := podsByUID[string(lease.Status.PodRef.UID)]; pod != nil &&
-				pod.Spec.NodeName == nodeName && !podIsTerminal(pod) {
+		for _, target := range lease.Spec.Targets {
+			targetResource := target.ResourceName
+			if targetResource == "" {
+				targetResource = poolResources[lease.Spec.PoolRef.Name]
+			}
+			if target.NodeName != nodeName || targetResource != resourceName || target.Count <= 0 {
 				continue
 			}
-		}
-		for _, target := range lease.Spec.Targets {
-			if target.NodeName == nodeName {
-				reserved += int64(target.Count)
+			targetQuantity := *resource.NewQuantity(int64(target.Count), resource.DecimalSI)
+			if lease.Status.PodRef != nil {
+				if pod := podsByUID[string(lease.Status.PodRef.UID)]; pod != nil &&
+					pod.Spec.NodeName == nodeName && !podIsTerminal(pod) {
+					podQuantity := podRequestQuantity(pod, resourceName)
+					if podQuantity.Cmp(targetQuantity) >= 0 {
+						continue
+					}
+				}
 			}
+			reserved.Add(targetQuantity)
 		}
 	}
 	return reserved
@@ -89,35 +115,45 @@ func OccupiedRemoteCapacity(leases []acceleratorv1alpha1.AcceleratorLease) Remot
 }
 
 func podRequest(pod *corev1.Pod, resourceName corev1.ResourceName) int64 {
-	var applicationSum int64
+	quantity := podRequestQuantity(pod, resourceName)
+	return quantity.Value()
+}
+
+func podRequestQuantity(pod *corev1.Pod, resourceName corev1.ResourceName) resource.Quantity {
+	applicationSum := *resource.NewQuantity(0, resource.DecimalSI)
 	for index := range pod.Spec.Containers {
-		applicationSum += containerRequest(pod.Spec.Containers[index], resourceName)
+		applicationSum.Add(containerRequestQuantity(pod.Spec.Containers[index], resourceName))
 	}
 
-	var largestInit int64
+	largestInit := *resource.NewQuantity(0, resource.DecimalSI)
 	for index := range pod.Spec.InitContainers {
-		requested := containerRequest(pod.Spec.InitContainers[index], resourceName)
-		if requested > largestInit {
+		requested := containerRequestQuantity(pod.Spec.InitContainers[index], resourceName)
+		if requested.Cmp(largestInit) > 0 {
 			largestInit = requested
 		}
 	}
-	if largestInit > applicationSum {
+	if largestInit.Cmp(applicationSum) > 0 {
 		applicationSum = largestInit
 	}
 	if quantity, exists := pod.Spec.Overhead[resourceName]; exists {
-		applicationSum += quantity.Value()
+		applicationSum.Add(quantity)
 	}
 	return applicationSum
 }
 
 func containerRequest(container corev1.Container, resourceName corev1.ResourceName) int64 {
+	quantity := containerRequestQuantity(container, resourceName)
+	return quantity.Value()
+}
+
+func containerRequestQuantity(container corev1.Container, resourceName corev1.ResourceName) resource.Quantity {
 	if quantity, exists := container.Resources.Requests[resourceName]; exists {
-		return quantity.Value()
+		return quantity.DeepCopy()
 	}
 	if quantity, exists := container.Resources.Limits[resourceName]; exists {
-		return quantity.Value()
+		return quantity.DeepCopy()
 	}
-	return 0
+	return *resource.NewQuantity(0, resource.DecimalSI)
 }
 
 func leaseConsumesCapacity(lease *acceleratorv1alpha1.AcceleratorLease) bool {

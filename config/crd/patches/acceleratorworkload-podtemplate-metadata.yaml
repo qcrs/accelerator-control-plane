@@ -1,0 +1,11 @@
+- op: add
+  path: /spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/podTemplate/properties/metadata/properties
+  value:
+    annotations:
+      additionalProperties:
+        type: string
+      type: object
+    labels:
+      additionalProperties:
+        type: string
+      type: object

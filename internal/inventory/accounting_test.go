@@ -48,8 +48,39 @@ func TestLocalAccountingAvoidsBoundLeaseDoubleCount(t *testing.T) {
 	if got := RequestedOnNode([]corev1.Pod{pod}, "node-a", resourceName); got != 1 {
 		t.Fatalf("expected one requested GPU, got %d", got)
 	}
-	if got := ReservedOnNode(leases, []corev1.Pod{pod}, "local", "node-a"); got != 2 {
+	poolResources := map[string]corev1.ResourceName{"local": resourceName}
+	if got := ReservedOnNode(leases, []corev1.Pod{pod}, poolResources, resourceName, "node-a"); got != 2 {
 		t.Fatalf("expected only unbound reservation to count, got %d", got)
+	}
+}
+
+func TestLocalAccountingCountsReservationsAcrossPoolsSharingAResource(t *testing.T) {
+	resourceName := corev1.ResourceName("nvidia.com/gpu")
+	leases := []acceleratorv1alpha1.AcceleratorLease{
+		{
+			Spec: acceleratorv1alpha1.AcceleratorLeaseSpec{
+				PoolRef: acceleratorv1alpha1.ClusterObjectReference{Name: "pool-a"},
+				Mode:    acceleratorv1alpha1.ExecutionModeLocal,
+				Targets: []acceleratorv1alpha1.AllocationTarget{{NodeName: "node-a", Count: 1}},
+			},
+			Status: acceleratorv1alpha1.AcceleratorLeaseStatus{Phase: acceleratorv1alpha1.AllocationPhaseReserved},
+		},
+		{
+			Spec: acceleratorv1alpha1.AcceleratorLeaseSpec{
+				PoolRef: acceleratorv1alpha1.ClusterObjectReference{Name: "different-resource"},
+				Mode:    acceleratorv1alpha1.ExecutionModeLocal,
+				Targets: []acceleratorv1alpha1.AllocationTarget{{NodeName: "node-a", Count: 3}},
+			},
+			Status: acceleratorv1alpha1.AcceleratorLeaseStatus{Phase: acceleratorv1alpha1.AllocationPhaseReserved},
+		},
+	}
+	poolResources := map[string]corev1.ResourceName{
+		"pool-a":             resourceName,
+		"pool-b":             resourceName,
+		"different-resource": "example.com/fpga",
+	}
+	if got := ReservedOnNode(leases, nil, poolResources, resourceName, "node-a"); got != 1 {
+		t.Fatalf("expected reservation from another pool sharing the resource to count, got %d", got)
 	}
 }
 
@@ -134,5 +165,47 @@ func TestNodeMatchesPodSchedulingConstraints(t *testing.T) {
 	podSpec.Tolerations = nil
 	if nodeMatchesPod(node, podSpec) {
 		t.Fatal("expected hard taint to reject Pod without toleration")
+	}
+}
+
+func TestQuantityAccountingPreservesScaleAndPodSchedulingSemantics(t *testing.T) {
+	resourceName := corev1.ResourceName("example.com/gpu-share")
+	pod := corev1.Pod{Spec: corev1.PodSpec{
+		NodeName: "node-a",
+		Containers: []corev1.Container{
+			{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{resourceName: resource.MustParse("500m")}}},
+			{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{resourceName: resource.MustParse("250m")}}},
+		},
+		InitContainers: []corev1.Container{{
+			Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{resourceName: resource.MustParse("1")}},
+		}},
+		Overhead: corev1.ResourceList{resourceName: resource.MustParse("250m")},
+	}}
+	wanted := resource.MustParse("1250m")
+	got := RequestedQuantityOnNode([]corev1.Pod{pod}, "node-a", resourceName)
+	if got.Cmp(wanted) != 0 {
+		t.Fatalf("quantity accounting returned %s, want %s", got.String(), wanted.String())
+	}
+}
+
+func TestLocalLeaseResourceSnapshotSurvivesPoolDeletionAndRelease(t *testing.T) {
+	resourceName := corev1.ResourceName("example.com/gpu-share")
+	lease := acceleratorv1alpha1.AcceleratorLease{
+		Spec: acceleratorv1alpha1.AcceleratorLeaseSpec{
+			PoolRef: acceleratorv1alpha1.ClusterObjectReference{Name: "deleted-pool"},
+			Mode:    acceleratorv1alpha1.ExecutionModeLocal,
+			Targets: []acceleratorv1alpha1.AllocationTarget{{
+				NodeName: "node-a", Count: 2, ResourceName: resourceName,
+				ResourceForm: acceleratorv1alpha1.ResourceFormShared,
+			}},
+		},
+		Status: acceleratorv1alpha1.AcceleratorLeaseStatus{Phase: acceleratorv1alpha1.AllocationPhaseReserved},
+	}
+	if got := ReservedOnNode([]acceleratorv1alpha1.AcceleratorLease{lease}, nil, nil, resourceName, "node-a"); got != 2 {
+		t.Fatalf("snapshotted resource reservation disappeared with its Pool, got %d", got)
+	}
+	lease.Status.Phase = acceleratorv1alpha1.AllocationPhaseReleased
+	if got := ReservedOnNode([]acceleratorv1alpha1.AcceleratorLease{lease}, nil, nil, resourceName, "node-a"); got != 0 {
+		t.Fatalf("released reservation still consumes %d units", got)
 	}
 }

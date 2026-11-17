@@ -2,7 +2,9 @@ package allocation
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	acceleratorv1alpha1 "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
@@ -16,15 +18,38 @@ import (
 type RemoteAllocator struct {
 	Resolver  contracts.EndpointResolver
 	Validator contracts.RemoteEndpointValidator
+	Claimer   EndpointClaimer
 	Now       func() time.Time
 }
 
-func (a *RemoteAllocator) Reserve(ctx context.Context, request contracts.ReservationRequest) (contracts.Reservation, error) {
+// EndpointClaim identifies the durable, globally unique ownership request for
+// one remote runtime endpoint. Device-level sharing is intentionally outside
+// the current whole-device S1/S2 scope.
+type EndpointClaim struct {
+	EndpointName   string
+	HolderKey      string
+	LeaseNamespace string
+	LeaseName      string
+	TTL            time.Duration
+}
+
+// EndpointClaimer turns a remote endpoint reservation into an API-server
+// compare-and-swap operation. Inventory snapshots are advisory; Claim is the
+// authoritative protection against stale-cache and leader-failover races.
+type EndpointClaimer interface {
+	Claim(ctx context.Context, claim EndpointClaim) error
+	Release(ctx context.Context, claim EndpointClaim) error
+}
+
+func (a *RemoteAllocator) Reserve(ctx context.Context, request contracts.ReservationRequest) (reservation contracts.Reservation, returnErr error) {
 	if a.Resolver == nil {
 		return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", "endpoint resolver is required")
 	}
 	if a.Validator == nil {
 		return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", "endpoint validator is required")
+	}
+	if a.Claimer == nil {
+		return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", "endpoint claimer is required")
 	}
 	if request.Mode != acceleratorv1alpha1.ExecutionModeRemote || request.LeaseKey == "" || request.TTL <= 0 {
 		return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", "remote mode, lease key, and a positive TTL are required")
@@ -34,15 +59,41 @@ func (a *RemoteAllocator) Reserve(ctx context.Context, request contracts.Reserva
 	}
 
 	seenEndpoints := make(map[string]struct{}, len(request.Targets))
-	bindings := make([]acceleratorv1alpha1.BoundEndpoint, 0, len(request.Targets))
+	endpointNames := make([]string, 0, len(request.Targets))
 	for _, target := range request.Targets {
-		if target.EndpointName == "" || len(target.DeviceIDs) == 0 {
-			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", "each target requires an endpoint name and device IDs")
+		if target.EndpointName == "" {
+			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", "each target requires an endpoint name")
+		}
+		if !target.Exclusive {
+			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindUnsupported, "reserve remote accelerator", "the static remote allocator supports whole-endpoint exclusive targets only")
 		}
 		if _, exists := seenEndpoints[target.EndpointName]; exists {
 			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", fmt.Sprintf("endpoint %q is duplicated", target.EndpointName))
 		}
 		seenEndpoints[target.EndpointName] = struct{}{}
+		endpointNames = append(endpointNames, target.EndpointName)
+	}
+	sort.Strings(endpointNames)
+	claimed := make([]EndpointClaim, 0, len(endpointNames))
+	for _, endpointName := range endpointNames {
+		claim := endpointClaim(request, endpointName)
+		if err := a.Claimer.Claim(ctx, claim); err != nil {
+			return contracts.Reservation{}, errors.Join(err, a.releaseClaims(ctx, claimed))
+		}
+		claimed = append(claimed, claim)
+	}
+	rollback := true
+	defer func() {
+		if rollback {
+			returnErr = errors.Join(returnErr, a.releaseClaims(ctx, claimed))
+		}
+	}()
+
+	bindings := make([]acceleratorv1alpha1.BoundEndpoint, 0, len(request.Targets))
+	for _, target := range request.Targets {
+		if target.EndpointName == "" || len(target.DeviceIDs) == 0 {
+			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", "each target requires an endpoint name and device IDs")
+		}
 
 		endpoint, err := a.Resolver.Resolve(ctx, target.EndpointName)
 		if err != nil {
@@ -82,6 +133,13 @@ func (a *RemoteAllocator) Reserve(ctx context.Context, request contracts.Reserva
 		if err := validateSelectedDevices(target, endpoint.Devices); err != nil {
 			return contracts.Reservation{}, err
 		}
+		if len(target.DeviceIDs) != healthyDeviceCount(endpoint.Devices) {
+			return contracts.Reservation{}, contracts.NewError(
+				contracts.ErrorKindConflict,
+				"reserve remote accelerator",
+				fmt.Sprintf("exclusive endpoint %q exposes %d healthy devices but the workload selected %d; static runtimes cannot hide unselected devices", target.EndpointName, healthyDeviceCount(endpoint.Devices), len(target.DeviceIDs)),
+			)
+		}
 		bindings = append(bindings, acceleratorv1alpha1.BoundEndpoint{
 			Name:       endpoint.Name,
 			Address:    endpoint.Address,
@@ -94,6 +152,7 @@ func (a *RemoteAllocator) Reserve(ctx context.Context, request contracts.Reserva
 	if a.Now != nil {
 		now = a.Now()
 	}
+	rollback = false
 	return contracts.Reservation{
 		BindingID: "remote/" + request.LeaseKey,
 		Endpoints: bindings,
@@ -105,11 +164,53 @@ func (a *RemoteAllocator) Bind(_ context.Context, _ contracts.ReservationRequest
 	return nil
 }
 
-func (a *RemoteAllocator) Release(_ context.Context, _ contracts.ReservationRequest) error {
-	// Removing the durable AcceleratorLease releases centrally accounted static
-	// endpoint capacity. Providers with an external session API can supply a
-	// different Allocator without changing the controller or Provider contract.
-	return nil
+func (a *RemoteAllocator) Release(ctx context.Context, request contracts.ReservationRequest) error {
+	if a.Claimer == nil {
+		return contracts.NewError(contracts.ErrorKindInvalid, "release remote accelerator", "endpoint claimer is required")
+	}
+	seen := make(map[string]struct{}, len(request.Targets))
+	claims := make([]EndpointClaim, 0, len(request.Targets))
+	for _, target := range request.Targets {
+		if target.EndpointName == "" {
+			continue
+		}
+		if _, exists := seen[target.EndpointName]; exists {
+			continue
+		}
+		seen[target.EndpointName] = struct{}{}
+		claims = append(claims, endpointClaim(request, target.EndpointName))
+	}
+	return a.releaseClaims(ctx, claims)
+}
+
+func (a *RemoteAllocator) releaseClaims(ctx context.Context, claims []EndpointClaim) error {
+	var releaseErrors []error
+	for index := len(claims) - 1; index >= 0; index-- {
+		if err := a.Claimer.Release(ctx, claims[index]); err != nil {
+			releaseErrors = append(releaseErrors, err)
+		}
+	}
+	return errors.Join(releaseErrors...)
+}
+
+func endpointClaim(request contracts.ReservationRequest, endpointName string) EndpointClaim {
+	return EndpointClaim{
+		EndpointName:   endpointName,
+		HolderKey:      request.LeaseKey,
+		LeaseNamespace: request.LeaseNamespace,
+		LeaseName:      request.LeaseName,
+		TTL:            request.TTL,
+	}
+}
+
+func healthyDeviceCount(devices []acceleratorv1alpha1.DeviceInfo) int {
+	count := 0
+	for _, device := range devices {
+		if device.Health == acceleratorv1alpha1.DeviceHealthHealthy {
+			count++
+		}
+	}
+	return count
 }
 
 func validateSelectedDevices(target acceleratorv1alpha1.AllocationTarget, devices []acceleratorv1alpha1.DeviceInfo) error {

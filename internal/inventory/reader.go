@@ -50,6 +50,7 @@ func (r *KubernetesReader) ListCandidates(ctx context.Context, request contracts
 	type providerProfile struct {
 		driver string
 		kinds  map[acceleratorv1alpha1.DeviceKind]struct{}
+		ready  bool
 	}
 	providerProfiles := make(map[string]providerProfile, len(providers.Items))
 	for index := range providers.Items {
@@ -58,7 +59,11 @@ func (r *KubernetesReader) ListCandidates(ctx context.Context, request contracts
 		for _, kind := range provider.Spec.DeviceKinds {
 			kinds[kind] = struct{}{}
 		}
-		providerProfiles[provider.Name] = providerProfile{driver: provider.Spec.Driver, kinds: kinds}
+		providerProfiles[provider.Name] = providerProfile{
+			driver: provider.Spec.Driver,
+			kinds:  kinds,
+			ready:  conditionReadyOrUnknown(provider.Status.Conditions, provider.Generation),
+		}
 	}
 
 	poolSelector := labels.Everything()
@@ -71,15 +76,22 @@ func (r *KubernetesReader) ListCandidates(ctx context.Context, request contracts
 	}
 
 	occupied := OccupiedRemoteCapacity(leases.Items)
+	localPoolResources := make(map[string]corev1.ResourceName, len(pools.Items))
+	for index := range pools.Items {
+		pool := &pools.Items[index]
+		if pool.Spec.Location == acceleratorv1alpha1.ExecutionModeLocal && pool.Spec.Local != nil && pool.Spec.Local.ResourceName != "" {
+			localPoolResources[pool.Name] = pool.Spec.Local.ResourceName
+		}
+	}
 	candidates := make([]contracts.Candidate, 0, len(nodes.Items)+len(endpoints.Items))
 	for index := range pools.Items {
 		pool := &pools.Items[index]
-		if pool.Spec.Unschedulable || pool.Spec.DeviceType != request.Accelerator.DeviceType ||
+		if pool.Spec.Unschedulable || !conditionReadyOrUnknown(pool.Status.Conditions, pool.Generation) || pool.Spec.DeviceType != request.Accelerator.DeviceType ||
 			!poolSelector.Matches(labels.Set(pool.Labels)) {
 			continue
 		}
 		profile, exists := providerProfiles[pool.Spec.ProviderRef.Name]
-		if !exists {
+		if !exists || !profile.ready {
 			continue
 		}
 		if _, supported := profile.kinds[pool.Spec.DeviceType]; !supported {
@@ -88,12 +100,17 @@ func (r *KubernetesReader) ListCandidates(ctx context.Context, request contracts
 
 		switch pool.Spec.Location {
 		case acceleratorv1alpha1.ExecutionModeLocal:
-			candidates = append(candidates, localCandidates(pool, &request.PodTemplate.Spec, nodes.Items, pods.Items, leases.Items)...)
+			candidates = append(candidates, localCandidates(pool, &request.PodTemplate.Spec, nodes.Items, pods.Items, leases.Items, localPoolResources)...)
 		case acceleratorv1alpha1.ExecutionModeRemote:
 			candidates = append(candidates, remoteCandidates(pool, profile.driver, endpoints.Items, occupied, r.Validator)...)
 		}
 	}
 	return candidates, nil
+}
+
+func conditionReadyOrUnknown(conditions []metav1.Condition, generation int64) bool {
+	condition := findCondition(conditions, "Ready")
+	return condition == nil || (condition.ObservedGeneration == generation && condition.Status == metav1.ConditionTrue)
 }
 
 func localCandidates(
@@ -102,6 +119,7 @@ func localCandidates(
 	nodes []corev1.Node,
 	pods []corev1.Pod,
 	leases []acceleratorv1alpha1.AcceleratorLease,
+	poolResources map[string]corev1.ResourceName,
 ) []contracts.Candidate {
 	if pool.Spec.Local == nil || pool.Spec.Local.ResourceName == "" {
 		return nil
@@ -112,33 +130,43 @@ func localCandidates(
 		if !nodeReady(node) || !containsLabels(node.Labels, pool.Spec.Local.NodeSelector) || !nodeMatchesPod(node, podSpec) {
 			continue
 		}
-		allocatableQuantity := node.Status.Allocatable[pool.Spec.Local.ResourceName]
-		allocatable := allocatableQuantity.Value()
-		used := RequestedOnNode(pods, node.Name, pool.Spec.Local.ResourceName)
-		reserved := ReservedOnNode(leases, pods, pool.Name, node.Name)
-		available := allocatable - used - reserved
-		if available < 0 {
-			available = 0
+		available := node.Status.Allocatable[pool.Spec.Local.ResourceName].DeepCopy()
+		used := RequestedQuantityOnNode(pods, node.Name, pool.Spec.Local.ResourceName)
+		reserved := ReservedQuantityOnNode(leases, pods, poolResources, pool.Spec.Local.ResourceName, node.Name)
+		available.Sub(used)
+		available.Sub(reserved)
+		if available.Sign() < 0 {
+			available = *resource.NewQuantity(0, resource.DecimalSI)
 		}
 
-		vendor := labelOr(node.Labels, pool.Spec.Local.VendorLabelKey, vendorFromResourceName(pool.Spec.Local.ResourceName))
-		model := labelOr(node.Labels, pool.Spec.Local.ModelLabelKey, "")
-		memory := quantityLabel(node.Labels, pool.Spec.Local.MemoryLabelKey)
+		vendorFallback := pool.Spec.Local.Vendor
+		if vendorFallback == "" {
+			vendorFallback = vendorFromResourceName(pool.Spec.Local.ResourceName)
+		}
+		vendor := labelOr(node.Labels, pool.Spec.Local.VendorLabelKey, vendorFallback)
+		model := labelOr(node.Labels, pool.Spec.Local.ModelLabelKey, pool.Spec.Local.Model)
+		memory := quantityLabelOr(node.Labels, pool.Spec.Local.MemoryLabelKey, pool.Spec.Local.Memory)
+		resourceForm := effectiveResourceForm(pool.Spec.Local.ResourceForm)
 		result = append(result, contracts.Candidate{
-			ID:           "local/" + pool.Name + "/" + node.Name,
-			ProviderName: pool.Spec.ProviderRef.Name,
-			PoolName:     pool.Name,
-			PoolPriority: pool.Spec.Priority,
-			Mode:         acceleratorv1alpha1.ExecutionModeLocal,
-			DeviceType:   pool.Spec.DeviceType,
-			NodeName:     node.Name,
-			ResourceName: pool.Spec.Local.ResourceName,
-			Vendor:       vendor,
-			Model:        model,
-			DeviceMemory: memory,
-			Labels:       mergeLabels(pool.Labels, node.Labels),
-			Available:    int32(available),
-			Ready:        true,
+			ID:                "local/" + pool.Name + "/" + node.Name,
+			ProviderName:      pool.Spec.ProviderRef.Name,
+			PoolName:          pool.Name,
+			PoolPriority:      pool.Spec.Priority,
+			Mode:              acceleratorv1alpha1.ExecutionModeLocal,
+			DeviceType:        pool.Spec.DeviceType,
+			NodeName:          node.Name,
+			ResourceName:      pool.Spec.Local.ResourceName,
+			ResourceForm:      resourceForm,
+			Profile:           pool.Spec.Local.Profile,
+			Isolation:         pool.Spec.Local.Isolation,
+			Vendor:            vendor,
+			Model:             model,
+			DeviceMemory:      memory,
+			Labels:            mergeLabels(pool.Labels, node.Labels),
+			Attributes:        copyStringMap(pool.Spec.Local.Attributes),
+			Available:         clampCapacity(available.Value()),
+			AvailableQuantity: available,
+			Ready:             true,
 		})
 	}
 	return result
@@ -160,6 +188,7 @@ func remoteCandidates(
 	}
 	result := make([]contracts.Candidate, 0, len(endpoints))
 	exclusive := pool.Spec.Remote.AllocationMode != acceleratorv1alpha1.RemoteAllocationModeDevice
+	duplicateUUIDs := duplicateDeviceUUIDs(endpoints)
 	for index := range endpoints {
 		endpoint := &endpoints[index]
 		if endpoint.Spec.PoolRef.Name != pool.Name || endpoint.Spec.Unschedulable ||
@@ -167,6 +196,15 @@ func remoteCandidates(
 			continue
 		}
 		ready, reason := endpointReady(endpoint, providerDriver)
+		if ready {
+			for _, device := range endpoint.Spec.Devices {
+				if _, duplicate := duplicateUUIDs[device.UUID]; device.UUID != "" && duplicate {
+					ready = false
+					reason = fmt.Sprintf("device UUID %q is declared by multiple endpoints", device.UUID)
+					break
+				}
+			}
+		}
 		if ready && validator != nil {
 			if err := validator.ValidateEndpoint(remoteEndpoint(endpoint)); err != nil {
 				ready = false
@@ -190,31 +228,52 @@ func remoteCandidates(
 				continue
 			}
 			freeDevices = append(freeDevices, contracts.Device{
-				ID:         device.ID,
-				Vendor:     device.Vendor,
-				Model:      device.Model,
-				Memory:     device.Memory.DeepCopy(),
-				Attributes: copyStringMap(device.Attributes),
+				ID:           device.ID,
+				Vendor:       device.Vendor,
+				Model:        device.Model,
+				Memory:       device.Memory.DeepCopy(),
+				ResourceForm: effectiveEndpointResourceForm(device.ResourceForm),
+				Profile:      device.Profile,
+				Isolation:    device.Isolation,
+				Attributes:   copyStringMap(device.Attributes),
 			})
 		}
 		sort.Slice(freeDevices, func(i, j int) bool { return freeDevices[i].ID < freeDevices[j].ID })
 		result = append(result, contracts.Candidate{
-			ID:             "remote/" + pool.Name + "/" + endpoint.Name,
-			ProviderName:   pool.Spec.ProviderRef.Name,
-			PoolName:       pool.Name,
-			PoolPriority:   pool.Spec.Priority,
-			Mode:           acceleratorv1alpha1.ExecutionModeRemote,
-			DeviceType:     pool.Spec.DeviceType,
-			EndpointName:   endpoint.Name,
-			Exclusive:      exclusive,
-			Labels:         mergeLabels(pool.Labels, endpoint.Labels),
-			Available:      int32(len(freeDevices)),
-			Devices:        freeDevices,
-			Ready:          ready,
-			Reason:         reason,
+			ID:           "remote/" + pool.Name + "/" + endpoint.Name,
+			ProviderName: pool.Spec.ProviderRef.Name,
+			PoolName:     pool.Name,
+			PoolPriority: pool.Spec.Priority,
+			Mode:         acceleratorv1alpha1.ExecutionModeRemote,
+			DeviceType:   pool.Spec.DeviceType,
+			EndpointName: endpoint.Name,
+			Exclusive:    exclusive,
+			Labels:       mergeLabels(pool.Labels, endpoint.Labels),
+			Available:    int32(len(freeDevices)),
+			Devices:      freeDevices,
+			Ready:        ready,
+			Reason:       reason,
 		})
 	}
 	return result
+}
+
+func duplicateDeviceUUIDs(endpoints []acceleratorv1alpha1.AcceleratorEndpoint) map[string]struct{} {
+	owners := map[string]string{}
+	duplicates := map[string]struct{}{}
+	for index := range endpoints {
+		for _, device := range endpoints[index].Spec.Devices {
+			if device.UUID == "" {
+				continue
+			}
+			if owner, exists := owners[device.UUID]; exists && owner != endpoints[index].Name {
+				duplicates[device.UUID] = struct{}{}
+				continue
+			}
+			owners[device.UUID] = endpoints[index].Name
+		}
+	}
+	return duplicates
 }
 
 func remoteEndpoint(endpoint *acceleratorv1alpha1.AcceleratorEndpoint) contracts.RemoteEndpoint {
@@ -242,8 +301,39 @@ func endpointReady(
 	if len(endpoint.Spec.Devices) == 0 {
 		return false, "no devices are declared"
 	}
-	if condition := findCondition(endpoint.Status.Conditions, "Ready"); condition != nil && condition.Status != metav1.ConditionTrue {
-		return false, fmt.Sprintf("Ready condition is %s: %s", condition.Status, condition.Message)
+	deviceIDs := map[string]struct{}{}
+	deviceUUIDs := map[string]struct{}{}
+	for _, device := range endpoint.Spec.Devices {
+		if device.ID == "" {
+			return false, "device ID is empty"
+		}
+		if _, duplicate := deviceIDs[device.ID]; duplicate {
+			return false, fmt.Sprintf("device ID %q is duplicated", device.ID)
+		}
+		deviceIDs[device.ID] = struct{}{}
+		if device.UUID == "" {
+			continue
+		}
+		if _, duplicate := deviceUUIDs[device.UUID]; duplicate {
+			return false, fmt.Sprintf("device UUID %q is duplicated", device.UUID)
+		}
+		deviceUUIDs[device.UUID] = struct{}{}
+	}
+	if condition := findCondition(endpoint.Status.Conditions, "Configured"); condition != nil {
+		if condition.ObservedGeneration != endpoint.Generation {
+			return false, fmt.Sprintf("Configured condition is stale for generation %d", endpoint.Generation)
+		}
+		if condition.Status != metav1.ConditionTrue {
+			return false, fmt.Sprintf("Configured condition is %s: %s", condition.Status, condition.Message)
+		}
+	}
+	if condition := findCondition(endpoint.Status.Conditions, "Ready"); condition != nil {
+		if condition.ObservedGeneration != endpoint.Generation {
+			return false, fmt.Sprintf("Ready condition is stale for generation %d", endpoint.Generation)
+		}
+		if condition.Status != metav1.ConditionTrue {
+			return false, fmt.Sprintf("Ready condition is %s: %s", condition.Status, condition.Message)
+		}
 	}
 	return true, ""
 }
@@ -379,6 +469,28 @@ func quantityLabel(values map[string]string, key string) resource.Quantity {
 		return resource.Quantity{}
 	}
 	return quantity
+}
+
+func quantityLabelOr(values map[string]string, key string, fallback resource.Quantity) resource.Quantity {
+	quantity := quantityLabel(values, key)
+	if !quantity.IsZero() {
+		return quantity
+	}
+	return fallback.DeepCopy()
+}
+
+func effectiveResourceForm(form acceleratorv1alpha1.ResourceForm) acceleratorv1alpha1.ResourceForm {
+	if form == "" {
+		return acceleratorv1alpha1.ResourceFormCustom
+	}
+	return form
+}
+
+func effectiveEndpointResourceForm(form acceleratorv1alpha1.ResourceForm) acceleratorv1alpha1.ResourceForm {
+	if form == "" {
+		return acceleratorv1alpha1.ResourceFormWholeDevice
+	}
+	return form
 }
 
 func labelOr(values map[string]string, key, fallback string) string {

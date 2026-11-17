@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: accelerator-system
+resources:
+  - ../crd
+  - ../rbac
+  - ../manager
+
+# The single-node ARM64 lab imports accelerator-control-plane:arm64 into the
+# K3s containerd image store. Production overlays should replace this tag with
+# an immutable registry digest.
+images:
+  - name: accelerator-control-plane
+    newName: accelerator-control-plane
+    newTag: arm64

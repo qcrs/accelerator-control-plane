@@ -29,7 +29,7 @@ func (r *ProviderRegistry) Register(provider Provider) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, exists := r.providers[provider.Driver()]; exists {
-		return fmt.Errorf("provider driver %q is already registered", provider.Driver())
+		return NewError(ErrorKindConflict, "register provider", fmt.Sprintf("driver %q is already registered", provider.Driver()))
 	}
 	r.providers[provider.Driver()] = provider
 	return nil

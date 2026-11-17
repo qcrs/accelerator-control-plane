@@ -7,7 +7,14 @@ import (
 )
 
 type ClientRuntimeSpec struct {
+	// +kubebuilder:validation:MinLength=1
 	Image string `json:"image"`
+
+	// RuntimeVersion is the remote server/runtime build this client image is
+	// compatible with. Providers reject a bound Endpoint with a different
+	// version before creating the application Pod.
+	// +kubebuilder:validation:MinLength=1
+	RuntimeVersion string `json:"runtimeVersion"`
 
 	// SourcePath is copied from the client image into a shared volume.
 	SourcePath string `json:"sourcePath,omitempty"`
@@ -17,6 +24,7 @@ type ClientRuntimeSpec struct {
 }
 
 type AcceleratorProviderSpec struct {
+	// +kubebuilder:validation:MinLength=1
 	Driver string `json:"driver"`
 
 	// +kubebuilder:validation:MinItems=1
@@ -26,14 +34,18 @@ type AcceleratorProviderSpec struct {
 
 	TrustBundleSecretRef *corev1.SecretReference `json:"trustBundleSecretRef,omitempty"`
 
+	AuthSecretRef *corev1.SecretReference `json:"authSecretRef,omitempty"`
+
 	// Parameters contains driver-specific configuration.
 	// +kubebuilder:pruning:PreserveUnknownFields
 	Parameters runtime.RawExtension `json:"parameters,omitempty"`
 }
 
 type AcceleratorProviderStatus struct {
-	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
-	Conditions         []metav1.Condition `json:"conditions,omitempty"`
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true

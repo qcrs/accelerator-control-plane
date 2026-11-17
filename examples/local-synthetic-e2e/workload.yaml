@@ -1,0 +1,44 @@
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorWorkload
+metadata:
+  name: synthetic-local-adapter
+  namespace: default
+  labels:
+    accelerator.qcrs.io/demo: synthetic-local
+spec:
+  accelerator:
+    deviceType: GPU
+    vendor: nvidia
+    count: 1
+    containerName: worker
+  placement:
+    mode: LocalOnly
+    reservationTTL: 2m
+  podTemplate:
+    metadata:
+      labels:
+        app: synthetic-local-adapter
+        accelerator.qcrs.io/demo: synthetic-local
+      annotations:
+        accelerator.qcrs.io/purpose: local-adapter-container-contract
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          # Reuses the complex demo image already loaded into kind. The
+          # command below overrides its CUDA entrypoint and does not call CUDA.
+          # Use the already loaded ARM64 CoreX workload image as a generic
+          # shell image; this command never calls CUDA and only checks the
+          # Local runtime injection contract.
+          image: corex-workload:arm64
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              test -z "${REMOTE_GPU_ADDRESS:-}"
+              test -z "${CRICKET_RPCID:-}"
+              test -z "${LD_PRELOAD:-}"
+              echo "synthetic local adapter container"
+              echo "REMOTE_GPU_ADDRESS=${REMOTE_GPU_ADDRESS:-unset}"
+              echo "CRICKET_RPCID=${CRICKET_RPCID:-unset}"
+              echo "LD_PRELOAD=${LD_PRELOAD:-unset}"

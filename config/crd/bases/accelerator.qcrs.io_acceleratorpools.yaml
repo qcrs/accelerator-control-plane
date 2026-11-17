@@ -1,136 +1,273 @@
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.21.0
   name: acceleratorpools.accelerator.qcrs.io
 spec:
   group: accelerator.qcrs.io
-  scope: Cluster
   names:
     kind: AcceleratorPool
     listKind: AcceleratorPoolList
     plural: acceleratorpools
+    shortNames:
+    - apool
     singular: acceleratorpool
-    shortNames: [apool]
+  scope: Cluster
   versions:
-    - name: v1alpha1
-      served: true
-      storage: true
-      subresources:
-        status: {}
-      additionalPrinterColumns:
-        - name: Location
-          type: string
-          jsonPath: .spec.location
-        - name: Type
-          type: string
-          jsonPath: .spec.deviceType
-        - name: Available
-          type: integer
-          jsonPath: .status.capacity.available
-      schema:
-        openAPIV3Schema:
-          type: object
-          required: [spec]
-          properties:
-            apiVersion:
-              type: string
-            kind:
-              type: string
-            metadata:
-              type: object
-            spec:
-              type: object
-              required: [providerRef, location, deviceType]
-              x-kubernetes-validations:
-                - rule: "self.location == 'Local' ? has(self.local) && !has(self.remote) : has(self.remote) && !has(self.local)"
-                  message: exactly one location-specific configuration must be set
-              properties:
-                providerRef:
-                  type: object
-                  required: [name]
-                  properties:
-                    name:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.location
+      name: Location
+      type: string
+    - jsonPath: .spec.deviceType
+      name: Type
+      type: string
+    - jsonPath: .status.capacity.available
+      name: Available
+      type: integer
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              deviceType:
+                enum:
+                - GPU
+                - NPU
+                type: string
+              local:
+                properties:
+                  attributes:
+                    additionalProperties:
                       type: string
-                      minLength: 1
-                location:
-                  type: string
-                  enum: [Local, Remote]
-                deviceType:
-                  type: string
-                  enum: [GPU, NPU]
-                priority:
-                  type: integer
-                  format: int32
-                unschedulable:
-                  type: boolean
-                local:
-                  type: object
-                  required: [resourceName]
-                  properties:
-                    resourceName:
-                      type: string
-                      minLength: 1
-                    nodeSelector:
-                      type: object
-                      additionalProperties:
-                        type: string
-                    vendorLabelKey:
-                      type: string
-                    modelLabelKey:
-                      type: string
-                    memoryLabelKey:
-                      type: string
-                remote:
-                  type: object
-                  properties:
-                    endpointSelector:
-                      type: object
-                      x-kubernetes-preserve-unknown-fields: true
-                    allocationMode:
-                      type: string
-                      default: ExclusiveEndpoint
-                      enum: [ExclusiveEndpoint, Device]
-            status:
-              type: object
-              properties:
-                observedGeneration:
-                  type: integer
-                  format: int64
-                capacity:
-                  type: object
-                  properties:
-                    total:
-                      type: integer
-                      format: int32
-                    available:
-                      type: integer
-                      format: int32
-                    reserved:
-                      type: integer
-                      format: int32
-                readyEndpoints:
-                  type: integer
-                  format: int32
-                conditions:
-                  type: array
-                  x-kubernetes-list-type: map
-                  x-kubernetes-list-map-keys: [type]
-                  items:
                     type: object
-                    required: [lastTransitionTime, message, reason, status, type]
+                  isolation:
+                    type: string
+                  memory:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  memoryLabelKey:
+                    type: string
+                  model:
+                    type: string
+                  modelLabelKey:
+                    type: string
+                  nodeSelector:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  profile:
+                    type: string
+                  resourceForm:
+                    default: Custom
+                    enum:
+                    - WholeDevice
+                    - MIG
+                    - Shared
+                    - Custom
+                    type: string
+                  resourceName:
+                    description: ResourceName is the name identifying various resources
+                      in a ResourceList.
+                    type: string
+                  vendor:
+                    type: string
+                  vendorLabelKey:
+                    type: string
+                required:
+                - resourceName
+                type: object
+              location:
+                enum:
+                - Local
+                - Remote
+                type: string
+              priority:
+                format: int32
+                type: integer
+              providerRef:
+                description: ClusterObjectReference identifies a cluster-scoped API
+                  object by name.
+                properties:
+                  name:
+                    minLength: 1
+                    type: string
+                required:
+                - name
+                type: object
+              remote:
+                properties:
+                  allocationMode:
+                    default: ExclusiveEndpoint
+                    enum:
+                    - ExclusiveEndpoint
+                    - Device
+                    type: string
+                  endpointSelector:
+                    description: |-
+                      A label selector is a label query over a set of resources. The result of matchLabels and
+                      matchExpressions are ANDed. An empty label selector matches all objects. A null
+                      label selector matches no objects.
                     properties:
-                      lastTransitionTime:
-                        type: string
-                        format: date-time
-                      message:
-                        type: string
-                      observedGeneration:
-                        type: integer
-                        format: int64
-                      reason:
-                        type: string
-                      status:
-                        type: string
-                        enum: ["True", "False", Unknown]
-                      type:
-                        type: string
+                      matchExpressions:
+                        description: matchExpressions is a list of label selector
+                          requirements. The requirements are ANDed.
+                        items:
+                          description: |-
+                            A label selector requirement is a selector that contains values, a key, and an operator that
+                            relates the key and values.
+                          properties:
+                            key:
+                              description: key is the label key that the selector
+                                applies to.
+                              type: string
+                            operator:
+                              description: |-
+                                operator represents a key's relationship to a set of values.
+                                Valid operators are In, NotIn, Exists and DoesNotExist.
+                              type: string
+                            values:
+                              description: |-
+                                values is an array of string values. If the operator is In or NotIn,
+                                the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                the values array must be empty. This array is replaced during a strategic
+                                merge patch.
+                              items:
+                                type: string
+                              type: array
+                              x-kubernetes-list-type: atomic
+                          required:
+                          - key
+                          - operator
+                          type: object
+                        type: array
+                        x-kubernetes-list-type: atomic
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                          map is equivalent to an element of matchExpressions, whose key field is "key", the
+                          operator is "In", and the values array contains only "value". The requirements are ANDed.
+                        type: object
+                    type: object
+                    x-kubernetes-map-type: atomic
+                type: object
+              unschedulable:
+                type: boolean
+            required:
+            - deviceType
+            - location
+            - providerRef
+            type: object
+            x-kubernetes-validations:
+            - message: exactly one location-specific configuration must be set
+              rule: 'self.location == ''Local'' ? has(self.local) && !has(self.remote)
+                : has(self.remote) && !has(self.local)'
+          status:
+            properties:
+              capacity:
+                properties:
+                  available:
+                    format: int32
+                    type: integer
+                  reserved:
+                    format: int32
+                    type: integer
+                  total:
+                    format: int32
+                    type: integer
+                type: object
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              observedGeneration:
+                format: int64
+                type: integer
+              readyEndpoints:
+                format: int32
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

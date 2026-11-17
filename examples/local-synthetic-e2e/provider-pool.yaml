@@ -1,0 +1,30 @@
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorProvider
+metadata:
+  name: synthetic-local-provider
+spec:
+  driver: kubernetes-device-plugin
+  deviceKinds:
+    - GPU
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorPool
+metadata:
+  name: synthetic-local-pool
+  labels:
+    accelerator.qcrs.io/tier: synthetic-local
+spec:
+  providerRef:
+    name: synthetic-local-provider
+  location: Local
+  deviceType: GPU
+  priority: 1000
+  local:
+    # The runner temporarily publishes this extended resource on one kind
+    # Node. It is a scheduler/control-plane test resource, not a real GPU.
+    resourceName: example.com/synthetic-gpu
+    resourceForm: WholeDevice
+    vendor: nvidia
+    model: synthetic-control-plane-gpu
+    nodeSelector:
+      accelerator.qcrs.io/synthetic-local-test: "true"

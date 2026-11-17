@@ -29,6 +29,12 @@ type DeviceInfo struct {
 
 	Memory resource.Quantity `json:"memory,omitempty"`
 
+	// +kubebuilder:default=WholeDevice
+	// +kubebuilder:validation:Enum=WholeDevice;MIG;Shared;Custom
+	ResourceForm ResourceForm `json:"resourceForm,omitempty"`
+	Profile      string       `json:"profile,omitempty"`
+	Isolation    string       `json:"isolation,omitempty"`
+
 	// +kubebuilder:validation:Enum=Healthy;Unhealthy;Unknown
 	Health DeviceHealth `json:"health"`
 
@@ -62,8 +68,20 @@ type AcceleratorEndpointSpec struct {
 type AcceleratorEndpointStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	LastProbeTime *metav1.Time `json:"lastProbeTime,omitempty"`
+	LastProbeTime     *metav1.Time    `json:"lastProbeTime,omitempty"`
+	Capacity          CapacitySummary `json:"capacity,omitempty"`
+	Health            DeviceHealth    `json:"health,omitempty"`
+	Reserved          int32           `json:"reserved,omitempty"`
+	Available         int32           `json:"available,omitempty"`
+	ActiveSessions    *int32          `json:"activeSessions,omitempty"`
+	ObservedAt        *metav1.Time    `json:"observedAt,omitempty"`
+	ObservationSource string          `json:"observationSource,omitempty"`
+	Confidence        string          `json:"confidence,omitempty"`
+	Reason            string          `json:"reason,omitempty"`
+	Message           string          `json:"message,omitempty"`
 
+	// +listType=map
+	// +listMapKey=type
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
@@ -72,6 +90,7 @@ type AcceleratorEndpointStatus struct {
 // +kubebuilder:resource:scope=Cluster,shortName=aendpoint
 // +kubebuilder:printcolumn:name="Pool",type=string,JSONPath=`.spec.poolRef.name`
 // +kubebuilder:printcolumn:name="Address",type=string,JSONPath=`.spec.address`
+// +kubebuilder:printcolumn:name="Configured",type=string,JSONPath=`.status.conditions[?(@.type=="Configured")].status`
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 type AcceleratorEndpoint struct {
 	metav1.TypeMeta   `json:",inline"`

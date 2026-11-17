@@ -1,0 +1,79 @@
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorProvider
+metadata:
+  name: mlu-remote
+spec:
+  driver: mlu-remote
+  deviceKinds:
+    - NPU
+  clientRuntime:
+    image: mlu-remote-client:arm64
+    runtimeVersion: mlu-remote-runtime-arm64-20261116
+    sourcePath: /opt/mlu-remote/lib
+    mountPath: /opt/accelerator/mlu
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorPool
+metadata:
+  name: mlu-remote
+  labels:
+    accelerator.qcrs.io/tier: remote
+spec:
+  providerRef:
+    name: mlu-remote
+  location: Remote
+  deviceType: NPU
+  priority: 10
+  remote:
+    allocationMode: ExclusiveEndpoint
+    endpointSelector:
+      matchLabels:
+        accelerator.qcrs.io/runtime: mlu-remote
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorEndpoint
+metadata:
+  name: mlu-remote-server
+  labels:
+    accelerator.qcrs.io/runtime: mlu-remote
+spec:
+  poolRef:
+    name: mlu-remote
+  address: mlu-remote-server.accelerator-system.svc:50051
+  runtime:
+    driver: mlu-remote
+    version: mlu-remote-runtime-arm64-20261116
+    apiVersion: "1"
+  devices:
+    - id: mlu-0
+      vendor: cambricon
+      model: MLU370-S4
+      memory: 24Gi
+      resourceForm: WholeDevice
+      health: Healthy
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorWorkload
+metadata:
+  name: mlu-remote-smoke
+  namespace: default
+spec:
+  accelerator:
+    deviceType: NPU
+    vendor: cambricon
+    count: 1
+    containerName: worker
+  placement:
+    mode: RemoteOnly
+    reservationTTL: 5m
+  podTemplate:
+    metadata:
+      labels:
+        app: mlu-remote-smoke
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: mlu-workload:arm64
+          imagePullPolicy: Never
+          command: ["/opt/workload/mlu-remote-client-test"]

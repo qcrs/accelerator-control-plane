@@ -9,20 +9,26 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
+const RuntimeInitContainersAnnotation = "accelerator.qcrs.io/runtime-init-containers"
+
 type CapabilitySet struct {
 	DeviceKinds           []acceleratorv1alpha1.DeviceKind
 	Modes                 []acceleratorv1alpha1.ExecutionMode
+	ResourceForms         []acceleratorv1alpha1.ResourceForm
 	RemoteAllocationModes []acceleratorv1alpha1.RemoteAllocationMode
 	SupportsTLS           bool
 	SupportsAuth          bool
 }
 
 type Device struct {
-	ID         string
-	Vendor     string
-	Model      string
-	Memory     resource.Quantity
-	Attributes map[string]string
+	ID           string
+	Vendor       string
+	Model        string
+	Memory       resource.Quantity
+	ResourceForm acceleratorv1alpha1.ResourceForm
+	Profile      string
+	Isolation    string
+	Attributes   map[string]string
 }
 
 // Candidate is a normalized allocation unit. Local candidates represent one
@@ -35,25 +41,44 @@ type Candidate struct {
 	Mode         acceleratorv1alpha1.ExecutionMode
 	DeviceType   acceleratorv1alpha1.DeviceKind
 
-	NodeName       string
-	EndpointName   string
-	ResourceName   corev1.ResourceName
-	Exclusive      bool
+	NodeName     string
+	EndpointName string
+	ResourceName corev1.ResourceName
+	ResourceForm acceleratorv1alpha1.ResourceForm
+	Profile      string
+	Isolation    string
+	Exclusive    bool
 
 	Vendor       string
 	Model        string
 	DeviceMemory resource.Quantity
 	Labels       map[string]string
+	Attributes   map[string]string
 	Available    int32
-	Devices      []Device
-	Ready        bool
-	Reason       string
+	// AvailableQuantity retains Kubernetes ResourceQuantity arithmetic for
+	// local extended resources. Available remains the whole-unit view used by
+	// remote device candidates and legacy callers.
+	AvailableQuantity resource.Quantity
+	Devices           []Device
+	Ready             bool
+	Reason            string
 }
 
 type SelectionRequest struct {
 	Accelerator acceleratorv1alpha1.AcceleratorRequest
 	Placement   acceleratorv1alpha1.PlacementPolicy
 	PodTemplate corev1.PodTemplateSpec
+
+	// PreferredMode is a soft ordering hint used by startup fallback. Exact
+	// failed targets remain hard exclusions.
+	PreferredMode acceleratorv1alpha1.ExecutionMode
+	Exclusions    []CandidateExclusion
+}
+
+type CandidateExclusion struct {
+	Mode       acceleratorv1alpha1.ExecutionMode
+	PoolName   string
+	TargetName string
 }
 
 type Decision struct {
@@ -74,14 +99,16 @@ type PolicyEngine interface {
 }
 
 type ReservationRequest struct {
-	LeaseKey     string
-	WorkloadUID  string
-	ProviderName string
-	PoolName     string
-	Mode         acceleratorv1alpha1.ExecutionMode
-	Request      acceleratorv1alpha1.AcceleratorRequest
-	Targets      []acceleratorv1alpha1.AllocationTarget
-	TTL          time.Duration
+	LeaseKey       string
+	LeaseNamespace string
+	LeaseName      string
+	WorkloadUID    string
+	ProviderName   string
+	PoolName       string
+	Mode           acceleratorv1alpha1.ExecutionMode
+	Request        acceleratorv1alpha1.AcceleratorRequest
+	Targets        []acceleratorv1alpha1.AllocationTarget
+	TTL            time.Duration
 }
 
 type Reservation struct {
@@ -99,6 +126,7 @@ type Allocator interface {
 }
 
 type RuntimePlan struct {
+	Mode          acceleratorv1alpha1.ExecutionMode
 	ContainerName string
 
 	InitContainers []corev1.Container
@@ -123,6 +151,29 @@ type Provider interface {
 	) (RuntimePlan, error)
 }
 
+// ExecutionAdapter is the control-plane seam for one pluggable execution
+// backend. Provider owns configuration validation and runtime materialization;
+// Allocator owns the corresponding capacity reservation and release. The
+// control plane never calls CUDA, RPC, or a vendor SDK directly. A concrete
+// adapter may therefore use a local device plugin, a remote GPU-over-IP
+// client, a vendor SDK, or an external session service without changing the
+// selection and Workload state machine.
+//
+// The Provider and Allocator returned by one adapter must describe the same
+// backend. This keeps a bound runtime plan and its capacity ownership on the
+// same extension boundary.
+type ExecutionAdapter interface {
+	Provider() Provider
+	Allocator() Allocator
+}
+
+// ProviderConfigurationValidator performs validation that does not depend on
+// a Pool. It is optional so external Provider implementations can adopt it
+// without changing the core runtime contract.
+type ProviderConfigurationValidator interface {
+	ValidateProvider(provider *acceleratorv1alpha1.AcceleratorProvider) error
+}
+
 type PodInjector interface {
 	Mutate(template corev1.PodTemplateSpec, plan RuntimePlan) (corev1.PodTemplateSpec, error)
 	JSONPatch(before, after corev1.PodTemplateSpec) ([]byte, error)
@@ -145,6 +196,26 @@ type EndpointReadiness struct {
 	Ready   bool
 	Reason  string
 	Message string
+}
+
+// EndpointObservation is the provider-neutral result of a remote runtime
+// probe. ActiveSessions is nil when the runtime has no trustworthy session
+// query; callers must not interpret that as zero.
+type EndpointObservation struct {
+	Health             acceleratorv1alpha1.DeviceHealth
+	AdvertisedCapacity int32
+	Reserved           int32
+	ActiveSessions     *int32
+	Available          *int32
+	ObservedAt         time.Time
+	Source             string
+	Confidence         string
+	Reason             string
+	Message            string
+}
+
+type EndpointObserver interface {
+	Observe(ctx context.Context, endpoint RemoteEndpoint) (EndpointObservation, error)
 }
 
 type EndpointResolver interface {

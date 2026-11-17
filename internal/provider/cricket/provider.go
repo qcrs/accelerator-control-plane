@@ -33,6 +33,9 @@ func (p *Provider) Capabilities() contracts.CapabilitySet {
 	return contracts.CapabilitySet{
 		DeviceKinds: []acceleratorv1alpha1.DeviceKind{acceleratorv1alpha1.DeviceKindGPU},
 		Modes:       []acceleratorv1alpha1.ExecutionMode{acceleratorv1alpha1.ExecutionModeRemote},
+		ResourceForms: []acceleratorv1alpha1.ResourceForm{
+			acceleratorv1alpha1.ResourceFormWholeDevice,
+		},
 		RemoteAllocationModes: []acceleratorv1alpha1.RemoteAllocationMode{
 			acceleratorv1alpha1.RemoteAllocationModeExclusiveEndpoint,
 		},
@@ -43,8 +46,8 @@ func (p *Provider) Validate(provider *acceleratorv1alpha1.AcceleratorProvider, p
 	if provider == nil || pool == nil {
 		return contracts.NewError(contracts.ErrorKindInvalid, "validate Cricket provider", "provider and pool are required")
 	}
-	if provider.Spec.Driver != DriverName {
-		return contracts.NewError(contracts.ErrorKindInvalid, "validate Cricket provider", fmt.Sprintf("driver must be %q", DriverName))
+	if err := p.ValidateProvider(provider); err != nil {
+		return err
 	}
 	if pool.Spec.Location != acceleratorv1alpha1.ExecutionModeRemote || pool.Spec.Remote == nil {
 		return contracts.NewError(contracts.ErrorKindInvalid, "validate Cricket provider", "a Remote pool is required")
@@ -55,14 +58,30 @@ func (p *Provider) Validate(provider *acceleratorv1alpha1.AcceleratorProvider, p
 	if remoteAllocationMode(pool.Spec.Remote) != acceleratorv1alpha1.RemoteAllocationModeExclusiveEndpoint {
 		return contracts.NewError(contracts.ErrorKindUnsupported, "validate Cricket provider", "Cricket requires ExclusiveEndpoint allocation")
 	}
+	return nil
+}
+
+func (p *Provider) ValidateProvider(provider *acceleratorv1alpha1.AcceleratorProvider) error {
+	if provider == nil {
+		return contracts.NewError(contracts.ErrorKindInvalid, "validate Cricket provider", "provider is required")
+	}
+	if provider.Spec.Driver != DriverName {
+		return contracts.NewError(contracts.ErrorKindInvalid, "validate Cricket provider", fmt.Sprintf("driver must be %q", DriverName))
+	}
 	if provider.Spec.ClientRuntime == nil || strings.TrimSpace(provider.Spec.ClientRuntime.Image) == "" {
 		return contracts.NewError(contracts.ErrorKindInvalid, "validate Cricket provider", "clientRuntime.image is required")
+	}
+	if strings.TrimSpace(provider.Spec.ClientRuntime.RuntimeVersion) == "" {
+		return contracts.NewError(contracts.ErrorKindInvalid, "validate Cricket provider", "clientRuntime.runtimeVersion is required")
 	}
 	if _, _, err := clientRuntimePaths(provider.Spec.ClientRuntime); err != nil {
 		return err
 	}
 	if provider.Spec.TrustBundleSecretRef != nil {
 		return contracts.NewError(contracts.ErrorKindUnsupported, "validate Cricket provider", "Cricket does not provide a TLS transport")
+	}
+	if provider.Spec.AuthSecretRef != nil {
+		return contracts.NewError(contracts.ErrorKindUnsupported, "validate Cricket provider", "Cricket does not provide an authenticated transport")
 	}
 	return nil
 }
@@ -89,6 +108,13 @@ func (p *Provider) BuildRuntimePlan(
 	if binding.Name == "" || binding.Name != lease.Spec.Targets[0].EndpointName {
 		return contracts.RuntimePlan{}, contracts.NewError(contracts.ErrorKindInvalid, "build Cricket runtime", "the endpoint binding does not match the allocation target")
 	}
+	if binding.Runtime.Version == "" || binding.Runtime.Version != provider.Spec.ClientRuntime.RuntimeVersion {
+		return contracts.RuntimePlan{}, contracts.NewError(
+			contracts.ErrorKindUnsupported,
+			"build Cricket runtime",
+			fmt.Sprintf("endpoint runtime version %q is incompatible with client runtime version %q", binding.Runtime.Version, provider.Spec.ClientRuntime.RuntimeVersion),
+		)
+	}
 	address, rpcID, err := endpointConnection(contracts.RemoteEndpoint{
 		Name:       binding.Name,
 		Address:    binding.Address,
@@ -114,6 +140,7 @@ func (p *Provider) BuildRuntimePlan(
 	}
 
 	return contracts.RuntimePlan{
+		Mode:          acceleratorv1alpha1.ExecutionModeRemote,
 		ContainerName: lease.Spec.Request.ContainerName,
 		Volumes: []corev1.Volume{{
 			Name: runtimeVolumeName,
@@ -155,6 +182,9 @@ func (p *Provider) ValidateEndpoint(endpoint contracts.RemoteEndpoint) error {
 func endpointConnection(endpoint contracts.RemoteEndpoint) (string, string, error) {
 	if endpoint.Runtime.Driver != DriverName {
 		return "", "", contracts.NewError(contracts.ErrorKindInvalid, "validate Cricket endpoint", fmt.Sprintf("runtime driver must be %q", DriverName))
+	}
+	if strings.TrimSpace(endpoint.Runtime.Version) == "" {
+		return "", "", contracts.NewError(contracts.ErrorKindInvalid, "validate Cricket endpoint", "runtime.version is required")
 	}
 	address, err := normalizeAddress(endpoint.Address)
 	if err != nil {

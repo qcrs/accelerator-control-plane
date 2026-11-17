@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: corex-remote-server
+  namespace: accelerator-system
+  labels:
+    app.kubernetes.io/name: corex-remote-server
+    accelerator.qcrs.io/runtime: corex-remote
+spec:
+  replicas: 1
+  serviceName: corex-remote-server
+  podManagementPolicy: OrderedReady
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: corex-remote-server
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: corex-remote-server
+        accelerator.qcrs.io/runtime: corex-remote
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      containers:
+        - name: server
+          image: corex-remote-server:arm64
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: COREX_REMOTE_BIND
+              value: "0.0.0.0"
+            - name: COREX_REMOTE_PORT
+              value: "50051"
+          ports:
+            - name: remote
+              containerPort: 50051
+              protocol: TCP
+          securityContext:
+            # Single-node hardware validation only. Replace with the CoreX
+            # device plugin and a minimal capability profile in production.
+            privileged: true
+          volumeMounts:
+            - name: iluvatar0
+              mountPath: /dev/iluvatar0
+      volumes:
+        - name: iluvatar0
+          hostPath:
+            path: /dev/iluvatar0
+            type: CharDevice
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: corex-remote-server
+  namespace: accelerator-system
+  labels:
+    accelerator.qcrs.io/runtime: corex-remote
+spec:
+  # CoreX CRX9/TCP sessions must reach the runtime Pod directly. A ClusterIP
+  # NAT path can accept the handshake but break the long-lived session during
+  # driver initialization, so use a headless Service for stable Pod DNS.
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: corex-remote-server
+  ports:
+    - name: remote
+      port: 50051
+      targetPort: remote
+      protocol: TCP

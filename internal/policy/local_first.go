@@ -8,6 +8,7 @@ import (
 
 	acceleratorv1alpha1 "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
 	"github.com/qcrs/accelerator-control-plane/internal/contracts"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 const LocalFirstPolicyName = "local-first-fit/v1"
@@ -26,6 +27,7 @@ func (p *LocalFirst) Select(_ context.Context, request contracts.SelectionReques
 	if err != nil {
 		return contracts.Decision{}, err
 	}
+	order = preferMode(order, request.PreferredMode)
 	rank := make(map[acceleratorv1alpha1.ExecutionMode]int, len(order))
 	for index, mode := range order {
 		rank[mode] = index
@@ -35,6 +37,10 @@ func (p *LocalFirst) Select(_ context.Context, request contracts.SelectionReques
 	rejected := 0
 	for _, candidate := range candidates {
 		if _, enabled := rank[candidate.Mode]; !enabled {
+			continue
+		}
+		if candidateExcluded(candidate, request.Exclusions) {
+			rejected++
 			continue
 		}
 		devices, ok := compatibleDevices(request.Accelerator, candidate)
@@ -80,6 +86,35 @@ func (p *LocalFirst) Select(_ context.Context, request contracts.SelectionReques
 	return contracts.Decision{}, contracts.NewError(contracts.ErrorKindUnschedulable, "select accelerator", message)
 }
 
+func preferMode(order []acceleratorv1alpha1.ExecutionMode, preferred acceleratorv1alpha1.ExecutionMode) []acceleratorv1alpha1.ExecutionMode {
+	if preferred == "" || len(order) < 2 || order[0] == preferred {
+		return order
+	}
+	for index, mode := range order {
+		if mode != preferred {
+			continue
+		}
+		result := append([]acceleratorv1alpha1.ExecutionMode(nil), order...)
+		copy(result[1:index+1], result[0:index])
+		result[0] = preferred
+		return result
+	}
+	return order
+}
+
+func candidateExcluded(candidate contracts.Candidate, exclusions []contracts.CandidateExclusion) bool {
+	targetName := candidate.NodeName
+	if candidate.Mode == acceleratorv1alpha1.ExecutionModeRemote {
+		targetName = candidate.EndpointName
+	}
+	for _, exclusion := range exclusions {
+		if exclusion.Mode == candidate.Mode && exclusion.PoolName == candidate.PoolName && exclusion.TargetName == targetName {
+			return true
+		}
+	}
+	return false
+}
+
 func placementOrder(placement acceleratorv1alpha1.PlacementPolicy) ([]acceleratorv1alpha1.ExecutionMode, error) {
 	switch placement.Mode {
 	case "", acceleratorv1alpha1.PlacementModeAuto:
@@ -113,7 +148,7 @@ func placementOrder(placement acceleratorv1alpha1.PlacementPolicy) ([]accelerato
 }
 
 func compatibleDevices(request acceleratorv1alpha1.AcceleratorRequest, candidate contracts.Candidate) ([]contracts.Device, bool) {
-	if !candidate.Ready || candidate.DeviceType != request.DeviceType || candidate.Available <= 0 {
+	if !candidate.Ready || candidate.DeviceType != request.DeviceType {
 		return nil, false
 	}
 	if !containsLabels(candidate.Labels, request.MatchLabels) {
@@ -121,16 +156,31 @@ func compatibleDevices(request acceleratorv1alpha1.AcceleratorRequest, candidate
 	}
 
 	if candidate.Mode == acceleratorv1alpha1.ExecutionModeLocal {
+		if !localCapacitySufficient(candidate, request.Count) {
+			return nil, false
+		}
 		if request.Vendor != "" && !strings.EqualFold(request.Vendor, candidate.Vendor) {
 			return nil, false
 		}
-		if candidate.Available < request.Count || !modelAllowed(candidate.Model, request.Models) {
+		if request.ResourceForm != "" && request.ResourceForm != candidate.ResourceForm {
+			return nil, false
+		}
+		if request.Profile != "" && !strings.EqualFold(request.Profile, candidate.Profile) {
+			return nil, false
+		}
+		if request.Isolation != "" && !strings.EqualFold(request.Isolation, candidate.Isolation) {
+			return nil, false
+		}
+		if !containsLabels(candidate.Attributes, request.MatchAttributes) || !modelAllowed(candidate.Model, request.Models) {
 			return nil, false
 		}
 		if !request.Memory.IsZero() && (candidate.DeviceMemory.IsZero() || candidate.DeviceMemory.Cmp(request.Memory) < 0) {
 			return nil, false
 		}
 		return nil, true
+	}
+	if candidate.Available <= 0 {
+		return nil, false
 	}
 
 	devices := make([]contracts.Device, 0, len(candidate.Devices))
@@ -144,6 +194,18 @@ func compatibleDevices(request acceleratorv1alpha1.AcceleratorRequest, candidate
 		if !request.Memory.IsZero() && device.Memory.Cmp(request.Memory) < 0 {
 			continue
 		}
+		if request.ResourceForm != "" && request.ResourceForm != device.ResourceForm {
+			continue
+		}
+		if request.Profile != "" && !strings.EqualFold(request.Profile, device.Profile) {
+			continue
+		}
+		if request.Isolation != "" && !strings.EqualFold(request.Isolation, device.Isolation) {
+			continue
+		}
+		if !containsLabels(device.Attributes, request.MatchAttributes) {
+			continue
+		}
 		devices = append(devices, device)
 	}
 	return devices, len(devices) > 0
@@ -152,7 +214,7 @@ func compatibleDevices(request acceleratorv1alpha1.AcceleratorRequest, candidate
 func selectLocal(count int32, candidates []eligibleCandidate) (contracts.Decision, bool) {
 	for _, eligible := range candidates {
 		candidate := eligible.candidate
-		if candidate.Mode != acceleratorv1alpha1.ExecutionModeLocal || candidate.Available < count {
+		if candidate.Mode != acceleratorv1alpha1.ExecutionModeLocal || !localCapacitySufficient(candidate, count) {
 			continue
 		}
 		return contracts.Decision{
@@ -160,8 +222,13 @@ func selectLocal(count int32, candidates []eligibleCandidate) (contracts.Decisio
 			PoolName:     candidate.PoolName,
 			Mode:         candidate.Mode,
 			Targets: []acceleratorv1alpha1.AllocationTarget{{
-				NodeName: candidate.NodeName,
-				Count:    count,
+				NodeName:     candidate.NodeName,
+				Count:        count,
+				ResourceName: candidate.ResourceName,
+				ResourceForm: candidate.ResourceForm,
+				Profile:      candidate.Profile,
+				Isolation:    candidate.Isolation,
+				Attributes:   copyStringMap(candidate.Attributes),
 			}},
 			Policy: LocalFirstPolicyName,
 			Reason: fmt.Sprintf("selected local node %s from pool %s", candidate.NodeName, candidate.PoolName),
@@ -189,6 +256,12 @@ func selectRemote(count int32, candidates []eligibleCandidate) (contracts.Decisi
 		targets := make([]acceleratorv1alpha1.AllocationTarget, 0, end-start)
 		for index := start; index < end; index++ {
 			if int32(len(candidates[index].devices)) < count {
+				continue
+			}
+			// A static exclusive runtime exposes every device visible to its
+			// server process. Selecting only a subset would let the workload use
+			// capacity it did not request, so exact coverage is mandatory.
+			if candidates[index].candidate.Exclusive && int32(len(candidates[index].devices)) != count {
 				continue
 			}
 			ids := make([]string, count)
@@ -249,7 +322,22 @@ func freeCount(candidate eligibleCandidate) int32 {
 	if candidate.candidate.Mode == acceleratorv1alpha1.ExecutionModeRemote {
 		return int32(len(candidate.devices))
 	}
+	if !candidate.candidate.AvailableQuantity.IsZero() {
+		value := candidate.candidate.AvailableQuantity.Value()
+		if value > int64(^uint32(0)>>1) {
+			return int32(^uint32(0) >> 1)
+		}
+		return int32(value)
+	}
 	return candidate.candidate.Available
+}
+
+func localCapacitySufficient(candidate contracts.Candidate, count int32) bool {
+	if !candidate.AvailableQuantity.IsZero() {
+		requested := resource.NewQuantity(int64(count), resource.DecimalSI)
+		return candidate.AvailableQuantity.Cmp(*requested) >= 0
+	}
+	return candidate.Available >= count
 }
 
 func modelAllowed(model string, allowed []string) bool {
@@ -271,4 +359,15 @@ func containsLabels(actual, required map[string]string) bool {
 		}
 	}
 	return true
+}
+
+func copyStringMap(source map[string]string) map[string]string {
+	if source == nil {
+		return nil
+	}
+	result := make(map[string]string, len(source))
+	for key, value := range source {
+		result[key] = value
+	}
+	return result
 }

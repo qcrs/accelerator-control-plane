@@ -2,15 +2,29 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type LocalPoolConfig struct {
-	ResourceName   corev1.ResourceName `json:"resourceName"`
-	NodeSelector   map[string]string   `json:"nodeSelector,omitempty"`
-	VendorLabelKey string              `json:"vendorLabelKey,omitempty"`
-	ModelLabelKey  string              `json:"modelLabelKey,omitempty"`
-	MemoryLabelKey string              `json:"memoryLabelKey,omitempty"`
+	ResourceName corev1.ResourceName `json:"resourceName"`
+
+	// +kubebuilder:default=Custom
+	// +kubebuilder:validation:Enum=WholeDevice;MIG;Shared;Custom
+	ResourceForm ResourceForm `json:"resourceForm,omitempty"`
+
+	Profile    string            `json:"profile,omitempty"`
+	Isolation  string            `json:"isolation,omitempty"`
+	Attributes map[string]string `json:"attributes,omitempty"`
+
+	Vendor string            `json:"vendor,omitempty"`
+	Model  string            `json:"model,omitempty"`
+	Memory resource.Quantity `json:"memory,omitempty"`
+
+	NodeSelector   map[string]string `json:"nodeSelector,omitempty"`
+	VendorLabelKey string            `json:"vendorLabelKey,omitempty"`
+	ModelLabelKey  string            `json:"modelLabelKey,omitempty"`
+	MemoryLabelKey string            `json:"memoryLabelKey,omitempty"`
 }
 
 type RemotePoolConfig struct {
@@ -46,10 +60,12 @@ type CapacitySummary struct {
 }
 
 type AcceleratorPoolStatus struct {
-	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
-	Capacity           CapacitySummary    `json:"capacity,omitempty"`
-	ReadyEndpoints     int32              `json:"readyEndpoints,omitempty"`
-	Conditions         []metav1.Condition `json:"conditions,omitempty"`
+	ObservedGeneration int64           `json:"observedGeneration,omitempty"`
+	Capacity           CapacitySummary `json:"capacity,omitempty"`
+	ReadyEndpoints     int32           `json:"readyEndpoints,omitempty"`
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true

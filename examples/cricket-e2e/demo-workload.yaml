@@ -1,0 +1,32 @@
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorWorkload
+metadata:
+  name: remote-cricket-demo
+  namespace: default
+  labels:
+    accelerator.qcrs.io/demo: remote-cricket
+spec:
+  accelerator:
+    deviceType: GPU
+    vendor: nvidia
+    count: 1
+    containerName: worker
+  placement:
+    mode: RemoteOnly
+    reservationTTL: 5m
+  podTemplate:
+    metadata:
+      labels:
+        app: remote-cricket-demo
+        accelerator.qcrs.io/demo: remote-cricket
+      annotations:
+        accelerator.qcrs.io/purpose: labels-and-remote-cuda
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: cricket-remote-kernel-test:cuda12.8
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: CRICKET_DEMO
+              value: remote-cricket-demo
