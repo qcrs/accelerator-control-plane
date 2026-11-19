@@ -1,0 +1,26 @@
+{
+  "corex-remote-server:arm64-observed-v4": {
+    "dockerImageID": "sha256:10e7fa83fe1f5a5858a6636426d2d87139472c97d802ea221f2b9501a5ec2e9f",
+    "manifestDescriptor": {
+      "digest": "sha256:10e7fa83fe1f5a5858a6636426d2d87139472c97d802ea221f2b9501a5ec2e9f",
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "size": 1194
+    },
+    "architecture": "arm64",
+    "repoDigests": [
+      "corex-remote-server@sha256:10e7fa83fe1f5a5858a6636426d2d87139472c97d802ea221f2b9501a5ec2e9f"
+    ]
+  },
+  "mlu-remote-server:arm64-observed-v4": {
+    "dockerImageID": "sha256:897cd07729ea1478f4992bbfbe6a65a775a4a332d1e37ac4b65e93091e34e70a",
+    "manifestDescriptor": {
+      "digest": "sha256:897cd07729ea1478f4992bbfbe6a65a775a4a332d1e37ac4b65e93091e34e70a",
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "size": 1194
+    },
+    "architecture": "arm64",
+    "repoDigests": [
+      "mlu-remote-server@sha256:897cd07729ea1478f4992bbfbe6a65a775a4a332d1e37ac4b65e93091e34e70a"
+    ]
+  }
+}

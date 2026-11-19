@@ -9,6 +9,7 @@ type DeviceHealth string
 
 const (
 	DeviceHealthHealthy   DeviceHealth = "Healthy"
+	DeviceHealthDegraded  DeviceHealth = "Degraded"
 	DeviceHealthUnhealthy DeviceHealth = "Unhealthy"
 	DeviceHealthUnknown   DeviceHealth = "Unknown"
 )
@@ -68,17 +69,19 @@ type AcceleratorEndpointSpec struct {
 type AcceleratorEndpointStatus struct {
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 
-	LastProbeTime     *metav1.Time    `json:"lastProbeTime,omitempty"`
-	Capacity          CapacitySummary `json:"capacity,omitempty"`
-	Health            DeviceHealth    `json:"health,omitempty"`
-	Reserved          int32           `json:"reserved,omitempty"`
-	Available         int32           `json:"available,omitempty"`
-	ActiveSessions    *int32          `json:"activeSessions,omitempty"`
-	ObservedAt        *metav1.Time    `json:"observedAt,omitempty"`
-	ObservationSource string          `json:"observationSource,omitempty"`
-	Confidence        string          `json:"confidence,omitempty"`
-	Reason            string          `json:"reason,omitempty"`
-	Message           string          `json:"message,omitempty"`
+	LastProbeTime *metav1.Time    `json:"lastProbeTime,omitempty"`
+	Capacity      CapacitySummary `json:"capacity,omitempty"`
+	// Health describes observed runtime/device enumeration and resource consistency.
+	// +kubebuilder:validation:Enum=Healthy;Degraded;Unhealthy;Unknown
+	Health            DeviceHealth `json:"health,omitempty"`
+	Reserved          int32        `json:"reserved,omitempty"`
+	Available         int32        `json:"available,omitempty"`
+	ActiveSessions    *int32       `json:"activeSessions,omitempty"`
+	ObservedAt        *metav1.Time `json:"observedAt,omitempty"`
+	ObservationSource string       `json:"observationSource,omitempty"`
+	Confidence        string       `json:"confidence,omitempty"`
+	Reason            string       `json:"reason,omitempty"`
+	Message           string       `json:"message,omitempty"`
 
 	// +listType=map
 	// +listMapKey=type

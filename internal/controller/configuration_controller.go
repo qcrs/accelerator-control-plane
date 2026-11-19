@@ -17,8 +17,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -68,7 +70,7 @@ func (r *PoolReconciler) SetupWithManager(manager ctrl.Manager) error {
 
 func (r *EndpointReconciler) SetupWithManager(manager ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(manager).
-		For(&acceleratorv1alpha1.AcceleratorEndpoint{}).
+		For(&acceleratorv1alpha1.AcceleratorEndpoint{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
 		Watches(&acceleratorv1alpha1.AcceleratorPool{}, handler.EnqueueRequestsFromMapFunc(r.endpointsForPool)).
 		Watches(&acceleratorv1alpha1.AcceleratorProvider{}, handler.EnqueueRequestsFromMapFunc(r.endpointsForProvider)).
 		Watches(&acceleratorv1alpha1.AcceleratorLease{}, handler.EnqueueRequestsFromMapFunc(r.endpointsForLease)).
@@ -164,47 +166,22 @@ func (r *EndpointReconciler) Reconcile(ctx context.Context, request ctrl.Request
 	status := metav1.ConditionTrue
 	if err != nil {
 		status = metav1.ConditionFalse
-		endpoint.Status.Health = acceleratorv1alpha1.DeviceHealthUnknown
-		endpoint.Status.Available = 0
-	} else {
-		// Lease accounting is the only authoritative occupancy signal available
-		// to the control plane. A missing remote probe never implies idle.
-		leases := &acceleratorv1alpha1.AcceleratorLeaseList{}
-		if listErr := r.List(ctx, leases); listErr != nil {
-			return ctrl.Result{}, listErr
-		}
-		reserved := int32(0)
-		for i := range leases.Items {
-			lease := &leases.Items[i]
-			if lease.Status.Phase != acceleratorv1alpha1.AllocationPhaseReserved && lease.Status.Phase != acceleratorv1alpha1.AllocationPhaseBound {
-				continue
-			}
-			for _, target := range lease.Spec.Targets {
-				if target.EndpointName == endpoint.Name {
-					reserved++
-					break
-				}
-			}
-		}
-		endpoint.Status.Reserved = reserved
-		endpoint.Status.Capacity = acceleratorv1alpha1.CapacitySummary{Total: int32(len(endpoint.Spec.Devices)), Reserved: reserved}
-		endpoint.Status.Health = acceleratorv1alpha1.DeviceHealthUnknown
-		endpoint.Status.Available = 0
-		endpoint.Status.ObservationSource = "lease-accounting"
-		endpoint.Status.Confidence = "Derived"
-		endpoint.Status.Reason = "RemoteProbeUnavailable"
-		endpoint.Status.Message = "remote health and active sessions are not observable; endpoint is not treated as idle"
 	}
 	setCondition(&endpoint.Status.Conditions, endpoint.Generation, ConditionConfigured, status, reason, message, configNow(r.Now))
+	if observationErr := r.observeEndpoint(ctx, endpoint, err == nil); observationErr != nil {
+		return ctrl.Result{}, observationErr
+	}
 	endpoint.Status.ObservedGeneration = endpoint.Generation
 	if reflect.DeepEqual(before, endpoint.Status) {
-		return ctrl.Result{RequeueAfter: configurationResyncInterval}, nil
+		return ctrl.Result{RequeueAfter: contracts.ObservationInterval}, nil
 	}
 	if err := r.Status().Update(ctx, endpoint); err != nil {
 		return ctrl.Result{}, err
 	}
 	recordConfigurationTransition(r.Recorder, endpoint, ConditionConfigured, before.Conditions, endpoint.Status.Conditions)
-	return ctrl.Result{RequeueAfter: configurationResyncInterval}, nil
+	recordConfigurationTransition(r.Recorder, endpoint, ConditionReady, before.Conditions, endpoint.Status.Conditions)
+	recordConfigurationTransition(r.Recorder, endpoint, "SessionsConsistent", before.Conditions, endpoint.Status.Conditions)
+	return ctrl.Result{RequeueAfter: contracts.ObservationInterval}, nil
 }
 
 func validateProviderConfiguration(provider *acceleratorv1alpha1.AcceleratorProvider, registry *contracts.ProviderRegistry) (string, string, error) {
@@ -473,6 +450,9 @@ func recordConfigurationTransition(recorder record.EventRecorder, object runtime
 	if newReady.Status != metav1.ConditionTrue {
 		eventType = corev1.EventTypeWarning
 		eventReason = "ConfigurationInvalid"
+	}
+	if conditionType == "SessionsConsistent" || conditionType == ConditionReady {
+		eventReason = newReady.Reason
 	}
 	recorder.Event(object, eventType, eventReason, newReady.Message)
 }

@@ -1,0 +1,14 @@
+[
+  {
+    "route": "direct",
+    "exitCode": 0,
+    "httpStatus": "401",
+    "error": ""
+  },
+  {
+    "route": "through-configured-proxy",
+    "exitCode": 28,
+    "httpStatus": "000",
+    "error": "curl: (28) SSL connection timeout"
+  }
+]

@@ -53,11 +53,7 @@ func NewRegistry(adapters ...contracts.ExecutionAdapter) (*Registry, error) {
 	registry := &Registry{
 		adapters: make(map[string]contracts.ExecutionAdapter, len(adapters)),
 	}
-	providers, err := contracts.NewProviderRegistry()
-	if err != nil {
-		return nil, err
-	}
-	registry.providers = providers
+	registry.providers = contracts.NewProviderRegistryView(registry)
 	for _, execution := range adapters {
 		if err := registry.Register(execution); err != nil {
 			return nil, err
@@ -86,9 +82,6 @@ func (r *Registry) Register(execution contracts.ExecutionAdapter) error {
 	defer r.mu.Unlock()
 	if _, exists := r.adapters[provider.Driver()]; exists {
 		return contracts.NewError(contracts.ErrorKindConflict, "register execution adapter", fmt.Sprintf("driver %q is already registered", provider.Driver()))
-	}
-	if err := r.providers.Register(provider); err != nil {
-		return err
 	}
 	r.adapters[provider.Driver()] = registered
 	return nil
@@ -190,9 +183,18 @@ func (r *Registry) Drivers() []string {
 	return drivers
 }
 
+// GetProvider implements the derived provider view using the same binding map.
+func (r *Registry) GetProvider(driver string) (contracts.Provider, error) {
+	execution, err := r.Get(driver)
+	if err != nil {
+		return nil, err
+	}
+	return execution.Provider(), nil
+}
+
 // Providers returns the provider view used by configuration and inventory
-// reconciliation. The returned registry is owned by this Registry and is safe
-// for concurrent reads and registration during process setup.
+// reconciliation. The returned registry is read-only; register complete bindings
+// with Register so provider and allocator views cannot diverge.
 func (r *Registry) Providers() *contracts.ProviderRegistry {
 	if r == nil {
 		return nil

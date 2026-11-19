@@ -1,0 +1,55 @@
+{
+  "cluster": {
+    "context": "default",
+    "nodeUIDs": [
+      "43cb5ba1-bf4a-4728-821f-116501202546"
+    ]
+  },
+  "images": {
+    "accelerator-control-plane:arm64-logic-20261119-v3": {
+      "dockerImageID": "sha256:4f5938b138bfec2d80f6729c1962ba57089075b217232378be174b66a3ef5740",
+      "architecture": "arm64",
+      "configDigest": "sha256:00cc02c5452953b3a8f710c52f4baf931cd6dc76e45fc085354be695fc7f87cd",
+      "manifestDigest": "sha256:4f5938b138bfec2d80f6729c1962ba57089075b217232378be174b66a3ef5740"
+    },
+    "corex-remote-server:arm64-observed-v4": {
+      "dockerImageID": "sha256:10e7fa83fe1f5a5858a6636426d2d87139472c97d802ea221f2b9501a5ec2e9f",
+      "architecture": "arm64",
+      "configDigest": "sha256:e9995d45712ce7e917d404132d94284c2793cbf97cf9865318a6c84644e75878",
+      "manifestDigest": "sha256:10e7fa83fe1f5a5858a6636426d2d87139472c97d802ea221f2b9501a5ec2e9f"
+    },
+    "mlu-remote-server:arm64-observed-v4": {
+      "dockerImageID": "sha256:897cd07729ea1478f4992bbfbe6a65a775a4a332d1e37ac4b65e93091e34e70a",
+      "architecture": "arm64",
+      "configDigest": "sha256:0e32f6cb2e45eac386e4cec525aa9c167ba61fd752c58ec3144543114890fa2a",
+      "manifestDigest": "sha256:897cd07729ea1478f4992bbfbe6a65a775a4a332d1e37ac4b65e93091e34e70a"
+    },
+    "corex-remote-client:arm64-observed-v1": {
+      "dockerImageID": "sha256:b30358b934ee5ed7729367d425b97f3406cbb905fcc11668063f228cf71f6cd4",
+      "architecture": "arm64",
+      "configDigest": "sha256:9d1bc6b9a4ad9d53182da3a1d3a680dfc3bb775217c20c8d8917c53220c8e610",
+      "manifestDigest": "sha256:b30358b934ee5ed7729367d425b97f3406cbb905fcc11668063f228cf71f6cd4"
+    },
+    "corex-workload:arm64-observed-v1": {
+      "dockerImageID": "sha256:b6c562e56b1c35deccc08c6a90d29c825173ee698f07689602030a54f8a331bb",
+      "architecture": "arm64",
+      "configDigest": "sha256:c76d81afbf009c859a2efac9eb579b16624c765854d84dd795aea949fba091b6",
+      "manifestDigest": "sha256:b6c562e56b1c35deccc08c6a90d29c825173ee698f07689602030a54f8a331bb"
+    },
+    "mlu-remote-client:arm64-observed-v1": {
+      "dockerImageID": "sha256:ea0f6bbd08611f2ffdedecd791b3028f400c888d797416ae7fca0436382f382e",
+      "architecture": "arm64",
+      "configDigest": "sha256:0d008972a3c73f33bc9f580bbfb714e5237fde2423ba182ed9d5f53e61e978be",
+      "manifestDigest": "sha256:ea0f6bbd08611f2ffdedecd791b3028f400c888d797416ae7fca0436382f382e"
+    },
+    "mlu-workload:arm64-observed-v1": {
+      "dockerImageID": "sha256:602497bec9ae895b32b4fa09d44722ac3608c8967c10b4bbcb2dd2380535afce",
+      "architecture": "arm64",
+      "configDigest": "sha256:c432e32a8b756971dee86ea4821e93fc5cc27ff8cf67fa7f112a44d641bb6921",
+      "manifestDigest": "sha256:602497bec9ae895b32b4fa09d44722ac3608c8967c10b4bbcb2dd2380535afce"
+    }
+  },
+  "clusterModified": false,
+  "archiveSHA256": "4c2e72f49acd05564fa1cec0290e1a78a6840e6f1d6a9a284a42280867d10611",
+  "archiveBytes": 95416320
+}

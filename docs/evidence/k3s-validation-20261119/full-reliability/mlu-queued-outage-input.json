@@ -1,0 +1,75 @@
+{
+  "apiVersion": "accelerator.qcrs.io/v1alpha1",
+  "kind": "AcceleratorWorkload",
+  "metadata": {
+    "name": "mlu-queued-outage",
+    "namespace": "accelerator-validation-1119094357"
+  },
+  "spec": {
+    "accelerator": {
+      "containerName": "worker",
+      "count": 1,
+      "deviceType": "NPU",
+      "vendor": "cambricon"
+    },
+    "placement": {
+      "mode": "Auto",
+      "reservationTTL": "5m",
+      "order": [
+        "Local",
+        "Remote"
+      ],
+      "fallback": {
+        "enabled": true,
+        "maxAttempts": 2,
+        "startupTimeout": "2m",
+        "backoff": "2s"
+      }
+    },
+    "podTemplate": {
+      "metadata": {
+        "labels": {
+          "app": "mlu-remote-smoke"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "command": [
+              "/bin/sh",
+              "-ec"
+            ],
+            "image": "mlu-workload:arm64-observed-v1",
+            "imagePullPolicy": "Never",
+            "name": "worker",
+            "args": [
+              "for device in /dev/nvidia* /dev/iluvatar* /dev/cambricon* /dev/cndrv* /dev/davinci* /dev/ascend*; do\n  if [ -e \"$device\" ]; then echo \"FAIL local accelerator visible: $device\"; exit 80; fi\ndone\necho LOCAL_ACCELERATOR_DEVICES=NONE\ni=0\nwhile [ \"$i\" -lt 1 ]; do\n  /opt/workload/mlu-remote-custom-kernel-test\n  i=$((i + 1))\n  if [ \"$i\" -lt 1 ]; then sleep 2; fi\ndone\necho KERNEL_FINISHED\nsleep 0\nexit 0\n"
+            ],
+            "securityContext": {
+              "runAsNonRoot": true,
+              "runAsUser": 65532,
+              "allowPrivilegeEscalation": false,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "10m",
+                "memory": "32Mi"
+              },
+              "limits": {
+                "memory": "128Mi"
+              }
+            }
+          }
+        ],
+        "restartPolicy": "Never",
+        "automountServiceAccountToken": false,
+        "activeDeadlineSeconds": 240
+      }
+    }
+  }
+}

@@ -1,0 +1,49 @@
+docker build -t accelerator-control-plane:arm64-logic-20261119-v3 .
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  16.26MB
+Step 1/14 : FROM golang:1.26.5-bookworm AS builder
+ ---> 847e36fcaad5
+Step 2/14 : ARG GOPROXY=https://goproxy.cn,direct
+ ---> Using cache
+ ---> 420392f1ab96
+Step 3/14 : ARG TARGETOS
+ ---> Using cache
+ ---> bf71d283d631
+Step 4/14 : ARG TARGETARCH
+ ---> Using cache
+ ---> 95d94e3b941c
+Step 5/14 : ENV GOPROXY=${GOPROXY}
+ ---> Using cache
+ ---> 717d0e1f205d
+Step 6/14 : WORKDIR /workspace
+ ---> Using cache
+ ---> 936436629a99
+Step 7/14 : COPY go.mod go.sum ./
+ ---> Using cache
+ ---> 6c1515510054
+Step 8/14 : RUN go mod download
+ ---> Using cache
+ ---> 5caa8c272fa8
+Step 9/14 : COPY . .
+ ---> 8d517bf866b0
+Step 10/14 : RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-arm64}     go build -trimpath -ldflags="-s -w" -o /out/manager ./cmd/manager
+ ---> Running in 580acf0c5e01
+ ---> Removed intermediate container 580acf0c5e01
+ ---> 96899cba5c31
+Step 11/14 : FROM gcr.io/distroless/static-debian12:nonroot
+ ---> f711e549e2f7
+Step 12/14 : COPY --from=builder /out/manager /manager
+ ---> 64ebb5c90cd8
+Step 13/14 : USER 65532:65532
+ ---> Running in 645d1ccf5369
+ ---> Removed intermediate container 645d1ccf5369
+ ---> 051a44289cb6
+Step 14/14 : ENTRYPOINT ["/manager"]
+ ---> Running in 494dbe64ca6b
+ ---> Removed intermediate container 494dbe64ca6b
+ ---> 4f5938b138bf
+Successfully built 4f5938b138bf
+Successfully tagged accelerator-control-plane:arm64-logic-20261119-v3

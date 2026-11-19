@@ -1,0 +1,18 @@
+go fmt ./...
+go vet ./...
+go test ./...
+?   	github.com/qcrs/accelerator-control-plane/api/v1alpha1	[no test files]
+?   	github.com/qcrs/accelerator-control-plane/cmd/manager	[no test files]
+ok  	github.com/qcrs/accelerator-control-plane/internal/adapter	(cached)
+ok  	github.com/qcrs/accelerator-control-plane/internal/allocation	0.165s
+ok  	github.com/qcrs/accelerator-control-plane/internal/contracts	(cached)
+ok  	github.com/qcrs/accelerator-control-plane/internal/controller	2.281s
+ok  	github.com/qcrs/accelerator-control-plane/internal/injector	(cached)
+ok  	github.com/qcrs/accelerator-control-plane/internal/inventory	(cached)
+ok  	github.com/qcrs/accelerator-control-plane/internal/policy	(cached)
+ok  	github.com/qcrs/accelerator-control-plane/internal/provider/corex	(cached)
+ok  	github.com/qcrs/accelerator-control-plane/internal/provider/cricket	(cached)
+ok  	github.com/qcrs/accelerator-control-plane/internal/provider/local	(cached)
+ok  	github.com/qcrs/accelerator-control-plane/internal/provider/mlu	(cached)
+ok  	github.com/qcrs/accelerator-control-plane/internal/provider/observation	0.103s
+go build -trimpath -o bin/manager ./cmd/manager

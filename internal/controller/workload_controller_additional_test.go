@@ -749,6 +749,7 @@ func newControllerHarness(
 		},
 	}
 	endpoint := &acceleratorv1alpha1.AcceleratorEndpoint{
+		Status:     observedEndpointStatusForTest(1),
 		ObjectMeta: metav1.ObjectMeta{Name: "endpoint-a", Generation: 1},
 		Spec: acceleratorv1alpha1.AcceleratorEndpointSpec{
 			PoolRef: acceleratorv1alpha1.ClusterObjectReference{Name: "remote"}, Address: "gpu.example",
@@ -801,7 +802,7 @@ func newControllerHarness(
 	}
 	adapters, err := executionadapter.NewRegistry(
 		executionadapter.NewBinding(localprovider.New(), localAllocator),
-		executionadapter.NewBinding(cricketprovider.New(), remoteAllocator),
+		executionadapter.NewBinding(newObservedCricketForTest(), remoteAllocator),
 	)
 	if err != nil {
 		t.Fatalf("create Adapter registry: %v", err)

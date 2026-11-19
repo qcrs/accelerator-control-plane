@@ -1,0 +1,6 @@
+{
+  "lib/driver-shim/libcndrv.so": "294c399528c093cc8b2c7c3b31c1e5ea9474dc005feefca7ac786905bee4d8a9",
+  "lib/libremote_cnnl.so": "eed0741d6df3acbeaeffc54631c25fd8df79a5bec0b8dc916141960dd5d22ee7",
+  "lib/libremote_cnrt.so": "b08b1cf7f8e33acdd259d63ad621cebba1edd4f54999e2b66ecd1feef73407e8",
+  "lib/shim/libcnrt.so": "888fcde406160655fbec7fe4af803a8c428e860fd8770da3ef18ccdca99beb8c"
+}

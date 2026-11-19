@@ -1,0 +1,311 @@
+{
+  "apiVersion": "v1",
+  "kind": "Pod",
+  "metadata": {
+    "annotations": {
+      "accelerator.qcrs.io/endpoint": "corex-remote-server",
+      "accelerator.qcrs.io/lease": "corex-ready-outage-e744a038-lease-1",
+      "accelerator.qcrs.io/mode": "Remote",
+      "accelerator.qcrs.io/pool": "corex-remote",
+      "accelerator.qcrs.io/provider": "corex-remote",
+      "accelerator.qcrs.io/runtime-init-containers": "accelerator-runtime-setup",
+      "accelerator.qcrs.io/workload-name": "corex-ready-outage"
+    },
+    "creationTimestamp": "2026-11-19T09:46:59Z",
+    "generation": 1,
+    "labels": {
+      "accelerator.qcrs.io/workload": "corex-ready-outage",
+      "accelerator.qcrs.io/workload-uid": "e744a038-e24c-405c-8d12-5f2f04076806",
+      "app": "corex-remote-smoke"
+    },
+    "name": "corex-ready-outage-e744a038",
+    "namespace": "accelerator-validation-1119094357",
+    "ownerReferences": [
+      {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "blockOwnerDeletion": true,
+        "controller": true,
+        "kind": "AcceleratorWorkload",
+        "name": "corex-ready-outage",
+        "uid": "e744a038-e24c-405c-8d12-5f2f04076806"
+      }
+    ],
+    "resourceVersion": "266362",
+    "uid": "3ce387a4-8175-4c81-a1bf-d33a2d67cd58"
+  },
+  "spec": {
+    "activeDeadlineSeconds": 240,
+    "automountServiceAccountToken": false,
+    "containers": [
+      {
+        "args": [
+          "for device in /dev/nvidia* /dev/iluvatar* /dev/cambricon* /dev/cndrv* /dev/davinci* /dev/ascend*; do\n  if [ -e \"$device\" ]; then echo \"FAIL local accelerator visible: $device\"; exit 80; fi\ndone\necho LOCAL_ACCELERATOR_DEVICES=NONE\ni=0\nwhile [ \"$i\" -lt 300 ]; do\n  /opt/workload/driver_smoke_app /opt/workload/driver_kernel.cubin\n  i=$((i + 1))\n  if [ \"$i\" -lt 300 ]; then sleep 2; fi\ndone\necho KERNEL_FINISHED\nsleep 0\nexit 0\n"
+        ],
+        "command": [
+          "/bin/sh",
+          "-ec"
+        ],
+        "env": [
+          {
+            "name": "COREX_SMOKE_TRACE",
+            "value": "1"
+          },
+          {
+            "name": "COREX_REMOTE_HOST",
+            "value": "corex-remote-server-0.corex-remote-server.accelerator-system.svc.cluster.local"
+          },
+          {
+            "name": "COREX_REMOTE_PORT",
+            "value": "50051"
+          },
+          {
+            "name": "LD_LIBRARY_PATH",
+            "value": "/opt/accelerator/corex"
+          }
+        ],
+        "image": "corex-workload:arm64-observed-v1",
+        "imagePullPolicy": "Never",
+        "name": "worker",
+        "resources": {
+          "limits": {
+            "memory": "128Mi"
+          },
+          "requests": {
+            "cpu": "10m",
+            "memory": "32Mi"
+          }
+        },
+        "securityContext": {
+          "allowPrivilegeEscalation": false,
+          "capabilities": {
+            "drop": [
+              "ALL"
+            ]
+          },
+          "runAsNonRoot": true,
+          "runAsUser": 65532
+        },
+        "terminationMessagePath": "/dev/termination-log",
+        "terminationMessagePolicy": "File",
+        "volumeMounts": [
+          {
+            "mountPath": "/opt/accelerator/corex",
+            "name": "accelerator-runtime",
+            "readOnly": true
+          }
+        ]
+      }
+    ],
+    "dnsPolicy": "ClusterFirst",
+    "enableServiceLinks": true,
+    "initContainers": [
+      {
+        "args": [
+          "-a",
+          "/opt/corex-remote/lib/.",
+          "/runtime/"
+        ],
+        "command": [
+          "/bin/cp"
+        ],
+        "image": "corex-remote-client:arm64-observed-v1",
+        "imagePullPolicy": "IfNotPresent",
+        "name": "accelerator-runtime-setup",
+        "resources": {},
+        "terminationMessagePath": "/dev/termination-log",
+        "terminationMessagePolicy": "File",
+        "volumeMounts": [
+          {
+            "mountPath": "/runtime",
+            "name": "accelerator-runtime"
+          }
+        ]
+      }
+    ],
+    "nodeName": "server310p",
+    "preemptionPolicy": "PreemptLowerPriority",
+    "priority": 0,
+    "restartPolicy": "Never",
+    "schedulerName": "default-scheduler",
+    "securityContext": {},
+    "serviceAccount": "default",
+    "serviceAccountName": "default",
+    "terminationGracePeriodSeconds": 30,
+    "tolerations": [
+      {
+        "effect": "NoExecute",
+        "key": "node.kubernetes.io/not-ready",
+        "operator": "Exists",
+        "tolerationSeconds": 300
+      },
+      {
+        "effect": "NoExecute",
+        "key": "node.kubernetes.io/unreachable",
+        "operator": "Exists",
+        "tolerationSeconds": 300
+      }
+    ],
+    "volumes": [
+      {
+        "emptyDir": {},
+        "name": "accelerator-runtime"
+      }
+    ]
+  },
+  "status": {
+    "allocatedResources": {
+      "cpu": "10m",
+      "memory": "32Mi"
+    },
+    "conditions": [
+      {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-19T09:47:04Z",
+        "message": "pod sandbox is not ready",
+        "observedGeneration": 1,
+        "reason": "PodSandboxNotReady",
+        "status": "False",
+        "type": "PodReadyToStartContainers"
+      },
+      {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-19T09:46:59Z",
+        "observedGeneration": 1,
+        "status": "True",
+        "type": "Initialized"
+      },
+      {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-19T09:47:02Z",
+        "observedGeneration": 1,
+        "reason": "PodFailed",
+        "status": "False",
+        "type": "Ready"
+      },
+      {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-19T09:47:02Z",
+        "observedGeneration": 1,
+        "reason": "PodFailed",
+        "status": "False",
+        "type": "ContainersReady"
+      },
+      {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-19T09:46:59Z",
+        "observedGeneration": 1,
+        "status": "True",
+        "type": "PodScheduled"
+      }
+    ],
+    "containerStatuses": [
+      {
+        "allocatedResources": {
+          "cpu": "10m",
+          "memory": "32Mi"
+        },
+        "containerID": "containerd://bce69205b23d32566a041f87d49b6c156987edbf748ee2a41881e644beaaa1e9",
+        "image": "docker.io/library/corex-workload:arm64-observed-v1",
+        "imageID": "sha256:c76d81afbf009c859a2efac9eb579b16624c765854d84dd795aea949fba091b6",
+        "lastState": {},
+        "name": "worker",
+        "ready": false,
+        "resources": {
+          "limits": {
+            "memory": "128Mi"
+          },
+          "requests": {
+            "cpu": "10m",
+            "memory": "32Mi"
+          }
+        },
+        "restartCount": 0,
+        "started": false,
+        "state": {
+          "terminated": {
+            "containerID": "containerd://bce69205b23d32566a041f87d49b6c156987edbf748ee2a41881e644beaaa1e9",
+            "exitCode": 1,
+            "finishedAt": "2026-11-19T09:47:02Z",
+            "reason": "Error",
+            "startedAt": "2026-11-19T09:47:00Z"
+          }
+        },
+        "user": {
+          "linux": {
+            "gid": 0,
+            "supplementalGroups": [
+              0
+            ],
+            "uid": 65532
+          }
+        },
+        "volumeMounts": [
+          {
+            "mountPath": "/opt/accelerator/corex",
+            "name": "accelerator-runtime",
+            "readOnly": true,
+            "recursiveReadOnly": "Disabled"
+          }
+        ]
+      }
+    ],
+    "hostIP": "192.168.31.244",
+    "hostIPs": [
+      {
+        "ip": "192.168.31.244"
+      }
+    ],
+    "initContainerStatuses": [
+      {
+        "containerID": "containerd://f8bfc8778eff452e6aef8084c65e1cfce9fa782c14d18d648e8400d397008711",
+        "image": "docker.io/library/corex-remote-client:arm64-observed-v1",
+        "imageID": "sha256:9d1bc6b9a4ad9d53182da3a1d3a680dfc3bb775217c20c8d8917c53220c8e610",
+        "lastState": {},
+        "name": "accelerator-runtime-setup",
+        "ready": true,
+        "resources": {},
+        "restartCount": 0,
+        "started": false,
+        "state": {
+          "terminated": {
+            "containerID": "containerd://f8bfc8778eff452e6aef8084c65e1cfce9fa782c14d18d648e8400d397008711",
+            "exitCode": 0,
+            "finishedAt": "2026-11-19T09:46:59Z",
+            "reason": "Completed",
+            "startedAt": "2026-11-19T09:46:59Z"
+          }
+        },
+        "user": {
+          "linux": {
+            "gid": 0,
+            "supplementalGroups": [
+              0
+            ],
+            "uid": 0
+          }
+        },
+        "volumeMounts": [
+          {
+            "mountPath": "/runtime",
+            "name": "accelerator-runtime"
+          }
+        ]
+      }
+    ],
+    "observedGeneration": 1,
+    "phase": "Failed",
+    "podIP": "10.42.0.108",
+    "podIPs": [
+      {
+        "ip": "10.42.0.108"
+      }
+    ],
+    "qosClass": "Burstable",
+    "resources": {
+      "requests": {
+        "memory": "32Mi"
+      }
+    },
+    "startTime": "2026-11-19T09:46:59Z"
+  }
+}

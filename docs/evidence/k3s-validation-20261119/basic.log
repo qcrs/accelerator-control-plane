@@ -1,0 +1,5 @@
+PASS: same cluster, no active tasks/claims, and all image tags reported by kubelet
+Image tags are a preflight check; runtime image digests still need checking after rollout.
+PASS preflight: new manager, imported images, no local accelerator resources, observed remote idle
+RUN corex Auto + numerical + cleanup
+FAIL: kubectl logs corex-auto-95e14f46 -n accelerator-validation-1119020902 -c worker: Error from server: Get "https://192.168.31.244:10250/containerLogs/accelerator-validation-1119020902/corex-auto-95e14f46/worker": EOF

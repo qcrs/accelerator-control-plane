@@ -1,0 +1,5 @@
+PASS: same cluster, no active tasks/claims, and all image tags reported by kubelet
+Image tags are a preflight check; runtime image digests still need checking after rollout.
+PASS preflight: new manager, imported images, no local accelerator resources, observed remote idle
+RUN corex Auto + numerical + cleanup
+FAIL: corex-auto terminal phase

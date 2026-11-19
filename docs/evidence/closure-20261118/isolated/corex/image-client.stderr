@@ -1,0 +1,60 @@
+DRIVER_SMOKE_START pid=1 image=/opt/workload/driver_kernel.cubin
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338801.709149549 api=cuInit(0)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338801.728475992 api=cuInit(0) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338801.728492362 api=cuDriverGetVersion(&version)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338801.772046062 api=cuDriverGetVersion(&version) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338801.772058291 api=cuDeviceGetCount(&count)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338801.772061651 api=cuDeviceGetCount(&count) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338801.772065141 api=cuDeviceGet(&device, 0)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338801.772067311 api=cuDeviceGet(&device, 0) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338801.772070151 api=cuDeviceGetName(name, (int)sizeof(name), device)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338801.816050174 api=cuDeviceGetName(name, (int)sizeof(name), device) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338801.816059194 api=cuDeviceTotalMem(&total, device)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338801.860071846 api=cuDeviceTotalMem(&total, device) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338801.860081486 api=cuDeviceGetAttribute(&warp, CU_DEVICE_ATTRIBUTE_WARP_SIZE, device)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338801.904048658 api=cuDeviceGetAttribute(&warp, CU_DEVICE_ATTRIBUTE_WARP_SIZE, device) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338801.904056498 api=cuCtxCreate(&context, 0, device)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338801.904064168 api=cuCtxCreate(&context, 0, device) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338801.904067548 api=cuMemAlloc(&input, 256)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338801.948051301 api=cuMemAlloc(&input, 256) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338801.948058281 api=cuMemAlloc_v2(&output, 256)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338801.992037533 api=cuMemAlloc_v2(&output, 256) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338801.992044373 api=cuMemcpyHtoD(input, host, sizeof(host))
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338801.992127452 api=cuMemcpyHtoD(input, host, sizeof(host)) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338801.992132592 api=cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.036077775 api=cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.036086765 api=cuEventCreate(&event, CU_EVENT_DEFAULT)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.080082449 api=cuEventCreate(&event, CU_EVENT_DEFAULT) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.080090399 api=cuMemcpyDtoDAsync(output, input, sizeof(host), stream)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.080187388 api=cuMemcpyDtoDAsync(output, input, sizeof(host), stream) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.080294106 api=cuModuleLoadData(&module, image)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.124106943 api=cuModuleLoadData(&module, image) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.124121703 api=cuModuleGetFunction(&function, module, "driver_add")
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.168216226 api=cuModuleGetFunction(&function, module, "driver_add") rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.168225125 api=cuLaunchKernel(function, 1, 1, 1, 256, 1, 1, 0, stream, args, NULL)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.168389503 api=cuLaunchKernel(function, 1, 1, 1, 256, 1, 1, 0, stream, args, NULL) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.168395813 api=cuEventRecord(event, stream)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.168465392 api=cuEventRecord(event, stream) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.168470392 api=cuEventSynchronize(event)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.168629049 api=cuEventSynchronize(event) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.168634469 api=cuMemcpyDtoH(result, output, sizeof(result))
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.216068469 api=cuMemcpyDtoH(result, output, sizeof(result)) rc=0
+DRIVER_SMOKE_NUMERICAL=PASS bytes=256
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.216077269 api=cuEventQuery(event)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.260094703 api=cuEventQuery(event) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.260102733 api=cuStreamSynchronize(stream)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.260208761 api=cuStreamSynchronize(stream) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.260214601 api=cuModuleUnload(module)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.260449097 api=cuModuleUnload(module) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.260457217 api=cuEventDestroy(event)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.260595765 api=cuEventDestroy(event) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.260601905 api=cuStreamDestroy(stream)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.261359043 api=cuStreamDestroy(stream) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.261367623 api=cuMemFree(input)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.261459011 api=cuMemFree(input) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.261464261 api=cuMemFree_v2(output)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.261570949 api=cuMemFree_v2(output) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.261576569 api=cuCtxPopCurrent(&context)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.261579849 api=cuCtxPopCurrent(&context) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=1 time=2338802.261582599 api=cuCtxDestroy(context)
+DRIVER_SMOKE_CALL phase=END pid=1 time=2338802.262166490 api=cuCtxDestroy(context) rc=0

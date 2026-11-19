@@ -1,0 +1,3 @@
+controller-gen object paths=./api/v1alpha1
+controller-gen crd paths=./api/v1alpha1 output:crd:dir=config/crd/bases
+GENERATION_STABILITY=PASS

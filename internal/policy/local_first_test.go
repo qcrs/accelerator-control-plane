@@ -32,15 +32,13 @@ func TestLocalFirstSelect(t *testing.T) {
 			wantTargets: 1,
 		},
 		{
-			name:    "remote pool aggregates ordered endpoints",
+			name:    "remote endpoints cannot aggregate",
 			request: gpuRequest(2),
 			candidates: []contracts.Candidate{
 				remoteCandidate("remote", "endpoint-b", 10, device("gpu-b", "24Gi")),
 				remoteCandidate("remote", "endpoint-a", 10, device("gpu-a", "24Gi")),
 			},
-			wantMode:    acceleratorv1alpha1.ExecutionModeRemote,
-			wantPool:    "remote",
-			wantTargets: 2,
+			wantErrorKind: contracts.ErrorKindUnschedulable,
 		},
 		{
 			name:    "remote pool prefers one endpoint when it fits",
@@ -270,6 +268,7 @@ func remoteCandidate(pool, endpoint string, priority int32, devices ...contracts
 		Mode:         acceleratorv1alpha1.ExecutionModeRemote,
 		DeviceType:   acceleratorv1alpha1.DeviceKindGPU,
 		EndpointName: endpoint,
+		Exclusive:    true,
 		Available:    int32(len(devices)),
 		Devices:      devices,
 		Ready:        true,
@@ -289,5 +288,40 @@ func device(id, memory string) contracts.Device {
 		Model:        "A100",
 		Memory:       resource.MustParse(memory),
 		ResourceForm: acceleratorv1alpha1.ResourceFormWholeDevice,
+	}
+}
+
+func TestDeviceCandidatesAreRejected(t *testing.T) {
+	candidate := remoteCandidate("remote", "endpoint", 1, device("gpu", "24Gi"))
+	candidate.Exclusive = false
+	_, err := NewLocalFirst().Select(context.Background(), gpuRequest(1), []contracts.Candidate{candidate})
+	if !contracts.IsErrorKind(err, contracts.ErrorKindUnschedulable) {
+		t.Fatalf("unsupported device allocation selected: %v", err)
+	}
+}
+
+func TestAutoSelectsRemoteWhenLocalHasNoGPUOrNPU(t *testing.T) {
+	for _, kind := range []acceleratorv1alpha1.DeviceKind{acceleratorv1alpha1.DeviceKindGPU, acceleratorv1alpha1.DeviceKindNPU} {
+		t.Run(string(kind), func(t *testing.T) {
+			request := gpuRequest(1)
+			request.Accelerator.DeviceType = kind
+			local := localCandidate("local", "no-device-node", 1, 0, "24Gi")
+			local.DeviceType = kind
+			remote := remoteCandidate("remote", "has-device-server", 1, device("0", "24Gi"))
+			remote.DeviceType = kind
+			decision, err := NewLocalFirst().Select(context.Background(), request, []contracts.Candidate{local, remote})
+			if err != nil || decision.Mode != acceleratorv1alpha1.ExecutionModeRemote || len(decision.Targets) != 1 || !decision.Targets[0].Exclusive {
+				t.Fatalf("local without %s did not select remote: %+v %v", kind, decision, err)
+			}
+		})
+	}
+}
+
+func TestExclusiveEndpointCannotSelectOnlyCompatibleSubset(t *testing.T) {
+	candidate := remoteCandidate("remote", "mixed", 1, device("matches", "24Gi"), device("other", "24Gi"))
+	candidate.Devices[1].Vendor = "other-vendor"
+	_, err := NewLocalFirst().Select(context.Background(), gpuRequest(1), []contracts.Candidate{candidate})
+	if !contracts.IsErrorKind(err, contracts.ErrorKindUnschedulable) {
+		t.Fatalf("selected a compatible subset of an exclusive endpoint: %v", err)
 	}
 }

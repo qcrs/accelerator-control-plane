@@ -1,0 +1,164 @@
+{
+  "apiVersion": "v1",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T05:56:15Z",
+      "involvedObject": {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "kind": "AcceleratorLease",
+        "name": "corex-auto-d31ef7d1-lease-1",
+        "namespace": "accelerator-validation-1119055612",
+        "resourceVersion": "251266",
+        "uid": "0cae544a-eadc-4f62-b7d0-2aaa25adaaa3"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T05:56:15Z",
+      "message": "released accelerator capacity for pool corex-remote",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T05:56:15Z",
+        "name": "corex-auto-d31ef7d1-lease-1.18e95ca188c49a4c",
+        "namespace": "accelerator-validation-1119055612",
+        "resourceVersion": "251267",
+        "uid": "429a5a8a-e8ed-43ac-a6e9-0af375f9abf7"
+      },
+      "reason": "Released",
+      "reportingComponent": "accelerator-control-plane",
+      "reportingInstance": "",
+      "source": {
+        "component": "accelerator-control-plane"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 2,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T05:56:15Z",
+      "involvedObject": {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "kind": "AcceleratorWorkload",
+        "name": "corex-auto",
+        "namespace": "accelerator-validation-1119055612",
+        "resourceVersion": "251250",
+        "uid": "d31ef7d1-a68d-4741-a506-0849af892aeb"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T05:56:15Z",
+      "message": "attempt 1 selected Remote mode using lease corex-auto-d31ef7d1-lease-1: selected 1 remote device(s) from endpoint corex-remote-server in pool corex-remote",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T05:56:15Z",
+        "name": "corex-auto.18e95ca17d6f56ce",
+        "namespace": "accelerator-validation-1119055612",
+        "resourceVersion": "251253",
+        "uid": "30dae279-2a34-4348-9f34-936da692fd34"
+      },
+      "reason": "Selected",
+      "reportingComponent": "accelerator-control-plane",
+      "reportingInstance": "",
+      "source": {
+        "component": "accelerator-control-plane"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T05:56:15Z",
+      "involvedObject": {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "kind": "AcceleratorWorkload",
+        "name": "corex-auto",
+        "namespace": "accelerator-validation-1119055612",
+        "resourceVersion": "251258",
+        "uid": "d31ef7d1-a68d-4741-a506-0849af892aeb"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T05:56:15Z",
+      "message": "attempt 1 in Remote mode failed before Ready: reserve remote accelerator: post-claim runtime observation failed: observe runtime: Get \"http://corex-remote-server-0.corex-remote-server.accelerator-system.svc.cluster.local:50052/v1/observation\": EOF",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T05:56:15Z",
+        "name": "corex-auto.18e95ca181645ba0",
+        "namespace": "accelerator-validation-1119055612",
+        "resourceVersion": "251260",
+        "uid": "5cfb5cb1-41ca-4528-b44b-1431a8888532"
+      },
+      "reason": "StartupFailed",
+      "reportingComponent": "accelerator-control-plane",
+      "reportingInstance": "",
+      "source": {
+        "component": "accelerator-control-plane"
+      },
+      "type": "Warning"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T05:56:15Z",
+      "involvedObject": {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "kind": "AcceleratorWorkload",
+        "name": "corex-auto",
+        "namespace": "accelerator-validation-1119055612",
+        "resourceVersion": "251262",
+        "uid": "d31ef7d1-a68d-4741-a506-0849af892aeb"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T05:56:15Z",
+      "message": "lease corex-auto-d31ef7d1-lease-1 reserved 1 GPU device(s) in pool corex-remote",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T05:56:15Z",
+        "name": "corex-auto.18e95ca187819182",
+        "namespace": "accelerator-validation-1119055612",
+        "resourceVersion": "251263",
+        "uid": "b454b86e-ce5f-476f-8afb-515a61f1d27f"
+      },
+      "reason": "Reserved",
+      "reportingComponent": "accelerator-control-plane",
+      "reportingInstance": "",
+      "source": {
+        "component": "accelerator-control-plane"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T05:56:15Z",
+      "involvedObject": {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "kind": "AcceleratorWorkload",
+        "name": "corex-auto",
+        "namespace": "accelerator-validation-1119055612",
+        "resourceVersion": "251271",
+        "uid": "d31ef7d1-a68d-4741-a506-0849af892aeb"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T05:56:15Z",
+      "message": "startup attempt 1 was released; next selection is eligible at 2026-11-19T05:56:17Z",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T05:56:15Z",
+        "name": "corex-auto.18e95ca18a05fcbe",
+        "namespace": "accelerator-validation-1119055612",
+        "resourceVersion": "251272",
+        "uid": "4f166609-bfa0-4d8c-bab3-d29736705e0f"
+      },
+      "reason": "FallbackScheduled",
+      "reportingComponent": "accelerator-control-plane",
+      "reportingInstance": "",
+      "source": {
+        "component": "accelerator-control-plane"
+      },
+      "type": "Normal"
+    }
+  ],
+  "kind": "List",
+  "metadata": {
+    "resourceVersion": ""
+  }
+}

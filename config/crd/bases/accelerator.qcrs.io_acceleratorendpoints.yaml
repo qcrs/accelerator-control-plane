@@ -229,6 +229,13 @@ spec:
               confidence:
                 type: string
               health:
+                description: Health describes observed runtime/device enumeration
+                  and resource consistency.
+                enum:
+                - Healthy
+                - Degraded
+                - Unhealthy
+                - Unknown
                 type: string
               lastProbeTime:
                 format: date-time

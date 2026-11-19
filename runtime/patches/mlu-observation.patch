@@ -1,0 +1,141 @@
+--- a/server/mlu_remote_server.c
++++ b/server/mlu_remote_server.c
+@@ -1,3 +1,4 @@
++#include "endpoint_observation.h"
+ #include "mlu_backend.h"
+ #include "remote_protocol.h"
+ #include "remote_io.h"
+@@ -417,12 +418,24 @@
+   sigaction(SIGINT, &action, NULL); sigaction(SIGTERM, &action, NULL);
+   fprintf(stderr, "[server] listening handshake_timeout_ms=%u io_timeout_ms=%u max_connections=%u\n",
+           handshake_timeout_ms, io_timeout_ms, mlu_resource_max_connections());
++  int observation_fd = observation_listen("MLU_REMOTE_OBSERVATION_PORT", bind_addr);
++  if (observation_fd == -2) { perror("observation listen"); return 1; }
+   int failed = 0;
+   while (!stop_server) {
+-    struct pollfd waiting[] = {{.fd = listen_fd, .events = POLLIN}, {.fd = signal_pipe[0], .events = POLLIN}};
+-    int polled = poll(waiting, 2, -1);
++    struct pollfd waiting[] = {{.fd = listen_fd, .events = POLLIN}, {.fd = signal_pipe[0], .events = POLLIN}, {.fd = observation_fd, .events = POLLIN}};
++    int polled = poll(waiting, 3, -1);
+     if (polled < 0) { if (errno == EINTR) continue; perror("poll accept"); failed = 1; break; }
+     if (stop_server) break;
++    if (observation_fd >= 0 && (waiting[2].revents & POLLIN)) {
++      int probe = observation_request(observation_fd);
++      if (probe >= 0) {
++        int capacity=0, healthy = mlu_backend_device_count(&capacity) == 0 && capacity > 0;
++        pthread_mutex_lock(&workers_lock);
++        unsigned active = active_workers, errors = cleanup_errors;
++        pthread_mutex_unlock(&workers_lock);
++        observation_reply(probe, "mlu-remote", healthy && !errors, capacity, active, errors);
++      }
++    }
+     if (!(waiting[0].revents & POLLIN)) continue;
+     int fd = accept(listen_fd, NULL, NULL);
+     if (fd < 0) { if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) continue; perror("accept"); failed = 1; break; }
+@@ -443,6 +456,7 @@
+   }
+   stop_server = 1;
+   close(listen_fd); listen_fd = -1;
++  if (observation_fd >= 0) close(observation_fd);
+   pthread_mutex_lock(&workers_lock);
+   fprintf(stderr, "[server] DRAIN_BEGIN workers=%u\n", active_workers);
+   for (struct worker_arg *w = workers; w; w = w->next) shutdown(w->fd, SHUT_RDWR);
+--- a/tests/client_custom_kernel.c
++++ b/tests/client_custom_kernel.c
+@@ -10,5 +10,6 @@
+   uint64_t q = 0, a = 0, b = 0, dst = 0; const uint32_t n = 1024; uint64_t bytes = n * sizeof(float); float *ha = malloc(bytes), *hb = malloc(bytes), *out = calloc(n, sizeof(float)); for (uint32_t i=0;i<n;i++){ha[i]=i;hb[i]=2*i;}
+   if ((st=mlu_remote_queue_create(ctx,&q)) || (st=mlu_remote_alloc(ctx,bytes,&a)) || (st=mlu_remote_alloc(ctx,bytes,&b)) || (st=mlu_remote_alloc(ctx,bytes,&dst)) || (st=mlu_remote_memcpy_h2d(ctx,a,0,ha,bytes,q,NULL)) || (st=mlu_remote_memcpy_h2d(ctx,b,0,hb,bytes,q,NULL)) || (st=mlu_remote_kernel_launch_vector_add(ctx,kernel,q,dst,a,b,n,1)) || (st=mlu_remote_queue_sync(ctx,q)) || (st=mlu_remote_memcpy_d2h(ctx,out,dst,0,bytes,q,NULL))) { const mlu_remote_error *e=mlu_remote_last_error(ctx); fprintf(stderr,"KERNEL status=%d %s: %s\n",st,e->name,e->message); return 1; }
+   for (uint32_t i=0;i<n;i++) if (out[i] != ha[i] + hb[i]) { fprintf(stderr,"kernel mismatch %u\n",i); return 1; }
++  printf("MLU_SMOKE_NUMERICAL=PASS elements=%u\n", n);
+   printf("PASS preset BANG vector_add module=%llu kernel=%llu\n",(unsigned long long)module,(unsigned long long)kernel); mlu_remote_free(ctx,a); mlu_remote_free(ctx,b); mlu_remote_free(ctx,dst); mlu_remote_queue_destroy(ctx,q); if ((st = mlu_remote_module_unload_preset(ctx, module)) != 0) { const mlu_remote_error *e=mlu_remote_last_error(ctx); fprintf(stderr,"MODULE_UNLOAD status=%d %s: %s\n",st,e->name,e->message); return 1; } free(ha);free(hb);free(out);mlu_remote_disconnect(ctx);return 0;
+ }
+--- /dev/null
++++ b/server/endpoint_observation.h
+@@ -0,0 +1,87 @@
++/* Minimal read-only runtime management endpoint. No session or device context
++ * is allocated. Copy this header into each runtime's server/ directory.
++ * Management counts include admitted handshakes and cleanup in progress. */
++#ifndef ENDPOINT_OBSERVATION_H
++#define ENDPOINT_OBSERVATION_H
++#include <arpa/inet.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <poll.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/socket.h>
++#include <sys/time.h>
++#include <time.h>
++#include <unistd.h>
++
++static int observation_listen(const char *env_name, const char *bind_host) {
++    const char *port = getenv(env_name);
++    if (!port || !*port) return -1; /* opt-in; old servers remain compatible */
++    char *end; long n = strtol(port, &end, 10);
++    if (*end || n < 1 || n > 65535) return -2;
++    int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
++    if (fd < 0) return -2;
++    int yes = 1; setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
++    struct sockaddr_in addr; memset(&addr, 0, sizeof(addr));
++    addr.sin_family = AF_INET; addr.sin_port = htons((unsigned short)n);
++    if (inet_pton(AF_INET, bind_host, &addr.sin_addr) != 1 ||
++        bind(fd, (struct sockaddr *)&addr, sizeof(addr)) || listen(fd, 8) ||
++        fcntl(fd, F_SETFL, O_NONBLOCK)) { close(fd); return -2; }
++    return fd;
++}
++
++static int observation_request(int listener) {
++    int fd = accept(listener, NULL, NULL);
++    if (fd < 0) return -1;
++    struct timeval timeout = {.tv_sec = 0, .tv_usec = 500000};
++    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
++    char request[1024]; size_t used = 0;
++    struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
++    long long deadline = (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000 + 500;
++    while (used < sizeof(request)-1) {
++        clock_gettime(CLOCK_MONOTONIC, &ts);
++        long long remaining = deadline - ((long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
++        if (remaining <= 0) break;
++        struct pollfd p = {.fd=fd, .events=POLLIN};
++        if (poll(&p, 1, (int)remaining) <= 0) break;
++        ssize_t n = recv(fd, request+used, sizeof(request)-1-used, MSG_DONTWAIT);
++        if (n <= 0) break;
++        used += (size_t)n; request[used] = 0;
++        /* Consume all headers before replying and closing. Leaving header
++         * bytes unread can reset a fragmented TCP request after the reply. */
++        if (strstr(request, "\r\n\r\n")) {
++            if (strncmp(request, "GET /v1/observation HTTP/1.", 27) == 0) return fd;
++            break;
++        }
++    }
++    close(fd); return -1;
++}
++
++static void observation_send_close(int fd, const char *reply, size_t length) {
++    size_t offset = 0;
++    while (offset < length) {
++        ssize_t sent = send(fd, reply+offset, length-offset, MSG_NOSIGNAL);
++        if (sent < 0 && errno == EINTR) continue;
++        if (sent <= 0) break;
++        offset += (size_t)sent;
++    }
++    close(fd);
++}
++
++static inline void observation_busy(int fd) {
++    const char reply[] = "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";
++    observation_send_close(fd, reply, sizeof(reply)-1);
++}
++
++static void observation_reply(int fd, const char *driver, int healthy,
++                              int capacity, unsigned sessions, unsigned cleanup_errors) {
++    char body[512], reply[768];
++    int n = snprintf(body, sizeof(body),
++        "{\"schemaVersion\":1,\"driver\":\"%s\",\"healthy\":%s,\"capacity\":%d,\"activeSessions\":%u,\"cleanupErrors\":%u}\n",
++        driver, healthy ? "true" : "false", capacity, sessions, cleanup_errors);
++    int length = snprintf(reply, sizeof(reply),
++        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nCache-Control: no-store\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s", n, body);
++    observation_send_close(fd, reply, (size_t)length);
++}
++#endif

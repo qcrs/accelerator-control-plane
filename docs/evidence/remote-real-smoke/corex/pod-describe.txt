@@ -1,0 +1,102 @@
+Name:             corex-remote-smoke-2d3c1a77
+Namespace:        default
+Priority:         0
+Service Account:  default
+Node:             server310p/192.168.31.244
+Start Time:       Mon, 16 Nov 2026 13:24:47 +0000
+Labels:           accelerator.qcrs.io/workload=corex-remote-smoke
+                  accelerator.qcrs.io/workload-uid=2d3c1a77-b974-4ad9-8263-f2ee7bae8538
+                  app=corex-remote-smoke
+Annotations:      accelerator.qcrs.io/endpoint: corex-remote-server
+                  accelerator.qcrs.io/lease: corex-remote-smoke-2d3c1a77-lease-1
+                  accelerator.qcrs.io/mode: Remote
+                  accelerator.qcrs.io/pool: corex-remote
+                  accelerator.qcrs.io/provider: corex-remote
+                  accelerator.qcrs.io/runtime-init-containers: accelerator-runtime-setup
+                  accelerator.qcrs.io/workload-name: corex-remote-smoke
+Status:           Succeeded
+IP:               10.42.0.80
+IPs:
+  IP:           10.42.0.80
+Controlled By:  AcceleratorWorkload/corex-remote-smoke
+Init Containers:
+  accelerator-runtime-setup:
+    Container ID:  containerd://38e3f42ea72ccfa69d772686fba37701a4d8248eba285e5036620ac3e5b05bb1
+    Image:         corex-remote-client:arm64
+    Image ID:      sha256:019d6bec16f4e882a5f2c35584acbe045f1f1b3c5258365cde242c7e8a93f1bf
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      /bin/cp
+    Args:
+      -a
+      /opt/corex-remote/lib/.
+      /runtime/
+    State:          Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Mon, 16 Nov 2026 13:24:48 +0000
+      Finished:     Mon, 16 Nov 2026 13:24:48 +0000
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /runtime from accelerator-runtime (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-8d9bb (ro)
+Containers:
+  worker:
+    Container ID:  containerd://b6fe89357a1ae80491e1a40f16f5174eab90d51cfcdbceb8bfe914530f7b58b8
+    Image:         corex-workload:arm64
+    Image ID:      sha256:e2388afb0ccd343d300fb0000366b67663b3d2458552e9051dc61f6e4e534001
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      /opt/workload/driver_smoke_app
+    Args:
+      /opt/workload/driver_kernel.cubin
+    State:          Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Mon, 16 Nov 2026 13:24:48 +0000
+      Finished:     Mon, 16 Nov 2026 13:24:49 +0000
+    Ready:          False
+    Restart Count:  0
+    Environment:
+      COREX_REMOTE_HOST:  10.42.0.65
+      COREX_REMOTE_PORT:  50051
+      LD_LIBRARY_PATH:    /opt/accelerator/corex
+    Mounts:
+      /opt/accelerator/corex from accelerator-runtime (ro)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-8d9bb (ro)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   False 
+  Initialized                 True 
+  Ready                       False 
+  ContainersReady             False 
+  PodScheduled                True 
+Volumes:
+  accelerator-runtime:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     
+    SizeLimit:  <unset>
+  kube-api-access-8d9bb:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+QoS Class:                   BestEffort
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type    Reason     Age   From               Message
+  ----    ------     ----  ----               -------
+  Normal  Scheduled  5s    default-scheduler  Successfully assigned default/corex-remote-smoke-2d3c1a77 to server310p
+  Normal  Pulled     5s    kubelet            spec.initContainers{accelerator-runtime-setup}: Container image "corex-remote-client:arm64" already present on machine and can be accessed by the pod
+  Normal  Created    5s    kubelet            spec.initContainers{accelerator-runtime-setup}: Container created
+  Normal  Started    5s    kubelet            spec.initContainers{accelerator-runtime-setup}: Container started
+  Normal  Pulled     5s    kubelet            spec.containers{worker}: Container image "corex-workload:arm64" already present on machine and can be accessed by the pod
+  Normal  Created    5s    kubelet            spec.containers{worker}: Container created
+  Normal  Started    5s    kubelet            spec.containers{worker}: Container started

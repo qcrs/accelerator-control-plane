@@ -1,0 +1,96 @@
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorWorkload
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"accelerator.qcrs.io/v1alpha1","kind":"AcceleratorWorkload","metadata":{"annotations":{},"name":"mlu-remote-smoke","namespace":"default"},"spec":{"accelerator":{"containerName":"worker","count":1,"deviceType":"NPU","vendor":"cambricon"},"placement":{"mode":"RemoteOnly","reservationTTL":"5m"},"podTemplate":{"metadata":{"labels":{"app":"mlu-remote-smoke"}},"spec":{"containers":[{"command":["/opt/workload/mlu-remote-client-test"],"image":"mlu-workload:arm64","imagePullPolicy":"Never","name":"worker"}],"restartPolicy":"Never"}}}}
+  creationTimestamp: "2026-11-16T13:24:31Z"
+  finalizers:
+  - accelerator.qcrs.io/workload-protection
+  generation: 2
+  name: mlu-remote-smoke
+  namespace: default
+  resourceVersion: "38935"
+  uid: 31d8fb42-e031-4a60-838e-950293720e39
+spec:
+  accelerator:
+    containerName: worker
+    count: 1
+    deviceType: NPU
+    memory: "0"
+    vendor: cambricon
+  placement:
+    mode: RemoteOnly
+    reservationTTL: 5m0s
+  podTemplate:
+    metadata:
+      labels:
+        app: mlu-remote-smoke
+    spec:
+      containers:
+      - command:
+        - /opt/workload/mlu-remote-client-test
+        image: mlu-workload:arm64
+        imagePullPolicy: Never
+        name: worker
+        resources: {}
+      restartPolicy: Never
+status:
+  allocationAttempt: 1
+  allocationRef: mlu-remote-smoke-31d8fb42-lease-1
+  conditions:
+  - lastTransitionTime: "2026-11-16T13:24:31Z"
+    message: workload specification is valid
+    observedGeneration: 2
+    reason: Valid
+    status: "True"
+    type: Accepted
+  - lastTransitionTime: "2026-11-16T13:24:31Z"
+    message: selected 1 remote device(s) from endpoint mlu-remote-server in pool mlu-remote
+    observedGeneration: 2
+    reason: Selected
+    status: "True"
+    type: Selected
+  - lastTransitionTime: "2026-11-16T13:24:31Z"
+    message: runtime configuration was injected and the workload Pod was created
+    observedGeneration: 2
+    reason: Materialized
+    status: "True"
+    type: RuntimeReady
+  - lastTransitionTime: "2026-11-16T13:24:33Z"
+    message: pod terminated with phase Succeeded
+    observedGeneration: 2
+    reason: Terminated
+    status: "False"
+    type: PodReady
+  - lastTransitionTime: "2026-11-16T13:24:31Z"
+    message: all selected remote endpoints remain configured and ready
+    observedGeneration: 2
+    reason: EndpointsHealthy
+    status: "False"
+    type: Degraded
+  decision:
+    decidedAt: "2026-11-16T13:24:31Z"
+    mode: Remote
+    policy: local-first-fit/v1
+    poolRef:
+      name: mlu-remote
+    providerRef:
+      name: mlu-remote
+    reason: selected 1 remote device(s) from endpoint mlu-remote-server in pool mlu-remote
+    targets:
+    - deviceIDs:
+      - mlu-0
+      endpointName: mlu-remote-server
+      exclusive: true
+  fallback:
+    readyObserved: true
+  observedGeneration: 2
+  phase: Succeeded
+  podRef:
+    apiVersion: v1
+    kind: Pod
+    name: mlu-remote-smoke-31d8fb42
+    namespace: default
+    uid: 889ac27e-fa6e-4e54-af98-bfd8b591380f
+  selectedMode: Remote

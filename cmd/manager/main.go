@@ -78,6 +78,7 @@ func main() {
 	recorder := manager.GetEventRecorderFor("accelerator-control-plane")
 	reconciler := &workloadcontroller.WorkloadReconciler{
 		Client:    manager.GetClient(),
+		APIReader: manager.GetAPIReader(),
 		Scheme:    manager.GetScheme(),
 		Inventory: inventory.NewKubernetesReader(manager.GetClient(), registry),
 		Policy:    policy.NewLocalFirst(),

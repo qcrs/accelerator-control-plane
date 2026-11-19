@@ -1,0 +1,26 @@
+{
+  "recordedAt": "2026-11-19T10:00:37.437643+00:00",
+  "localFixes": [
+    "probe transport errors retain reservation and fallback budget",
+    "CoreX concurrent probe returns HTTP 503",
+    "complete HTTP headers before replying",
+    "single two-second observation retry budget",
+    "authoritative lifecycle reads and optimistic status writes",
+    "restore recorded deployment strategy"
+  ],
+  "validation": {
+    "goVerify": "PASS",
+    "goRace": "PASS",
+    "apiServerStatusCAS": "PASS",
+    "nativeGpuNpuNumericsAndConcurrentObservation": "PASS",
+    "mluV4ServerImageNumerics": "PASS",
+    "pythonAndNativeHttpTests": 28
+  },
+  "imagesDeployed": true,
+  "kubernetesMatrix": "PASS",
+  "gitCommitted": false,
+  "gitPushed": false,
+  "scenarioCount": 13,
+  "finalAudit": "PASS",
+  "durableBundle": "/home/lvtong/vGPU/vGPU/accelerator-control-plane/dist/k3s-validation-20261119-reliability"
+}

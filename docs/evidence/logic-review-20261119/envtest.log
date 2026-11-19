@@ -1,0 +1,4 @@
+=== RUN   TestCRDsAndAtomicEndpointClaimsWithEnvtest
+--- PASS: TestCRDsAndAtomicEndpointClaimsWithEnvtest (7.03s)
+PASS
+ok  	github.com/qcrs/accelerator-control-plane/internal/controller	7.060s

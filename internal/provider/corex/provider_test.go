@@ -88,3 +88,25 @@ func TestEndpointConnectionUsesPortParameter(t *testing.T) {
 		t.Fatalf("endpointConnection() = %q:%q", host, port)
 	}
 }
+
+// A nonexistent Kubernetes DNS name must be passed through unchanged, without
+// doing network resolution in the control-plane process.
+func TestRuntimePlanPreservesStatefulDNS(t *testing.T) {
+	lease := &acceleratorv1alpha1.AcceleratorLease{
+		Spec:   acceleratorv1alpha1.AcceleratorLeaseSpec{Mode: acceleratorv1alpha1.ExecutionModeRemote, Targets: []acceleratorv1alpha1.AllocationTarget{{EndpointName: "server", Exclusive: true}}},
+		Status: acceleratorv1alpha1.AcceleratorLeaseStatus{Binding: acceleratorv1alpha1.RuntimeBinding{ID: "binding", Endpoints: []acceleratorv1alpha1.BoundEndpoint{{Name: "server", Address: "server-0.server.test.svc.cluster.local:50051", Runtime: acceleratorv1alpha1.RuntimeInfo{Driver: DriverName, Version: "corex-remote-arm64-4.4"}}}}},
+	}
+	plan, err := New().BuildRuntimePlan(context.Background(), providerFixture(), poolFixture(), lease)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range plan.Env {
+		if v.Name == "COREX_REMOTE_HOST" {
+			if v.Value != "server-0.server.test.svc.cluster.local" {
+				t.Fatal(v.Value)
+			}
+			return
+		}
+	}
+	t.Fatal("missing host")
+}

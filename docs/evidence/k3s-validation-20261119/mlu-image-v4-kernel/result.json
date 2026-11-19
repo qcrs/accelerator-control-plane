@@ -1,0 +1,26 @@
+{
+  "result": "PASS",
+  "serverImage": "mlu-remote-server:arm64-observed-v4",
+  "clientImage": "mlu-workload:arm64-observed-v1",
+  "before": {
+    "schemaVersion": 1,
+    "driver": "mlu-remote",
+    "healthy": true,
+    "capacity": 1,
+    "activeSessions": 0,
+    "cleanupErrors": 0
+  },
+  "after": {
+    "schemaVersion": 1,
+    "driver": "mlu-remote",
+    "healthy": true,
+    "capacity": 1,
+    "activeSessions": 0,
+    "cleanupErrors": 0
+  },
+  "numericalElements": 1024,
+  "clientExitCode": 0,
+  "hostSDKMounted": false,
+  "privileged": false,
+  "samePhysicalHost": true
+}

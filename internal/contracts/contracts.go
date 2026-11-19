@@ -191,7 +191,8 @@ type RemoteEndpoint struct {
 }
 
 // EndpointReadiness is nil when a static endpoint has no external health
-// observer. A non-nil value represents the explicitly published Ready state.
+// observer, and must be treated as Unknown (not allocatable). A non-nil value
+// represents readiness derived from a current trusted observation.
 type EndpointReadiness struct {
 	Ready   bool
 	Reason  string

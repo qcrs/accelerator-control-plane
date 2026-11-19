@@ -237,83 +237,20 @@ func selectLocal(count int32, candidates []eligibleCandidate) (contracts.Decisio
 	return contracts.Decision{}, false
 }
 
+// The current allocator and runtime plans support exactly one exclusive endpoint.
 func selectRemote(count int32, candidates []eligibleCandidate) (contracts.Decision, bool) {
-	for start := 0; start < len(candidates); {
-		first := candidates[start].candidate
-		if first.Mode != acceleratorv1alpha1.ExecutionModeRemote {
-			start++
+	for _, eligible := range candidates {
+		c := eligible.candidate
+		if c.Mode != acceleratorv1alpha1.ExecutionModeRemote || !c.Exclusive || int32(len(eligible.devices)) != count || int32(len(c.Devices)) != count {
 			continue
 		}
-		end := start + 1
-		for end < len(candidates) &&
-			candidates[end].candidate.Mode == first.Mode &&
-			candidates[end].candidate.PoolName == first.PoolName &&
-			candidates[end].candidate.ProviderName == first.ProviderName {
-			end++
+		ids := make([]string, len(eligible.devices))
+		for i, device := range eligible.devices {
+			ids[i] = device.ID
 		}
-
-		remaining := count
-		targets := make([]acceleratorv1alpha1.AllocationTarget, 0, end-start)
-		for index := start; index < end; index++ {
-			if int32(len(candidates[index].devices)) < count {
-				continue
-			}
-			// A static exclusive runtime exposes every device visible to its
-			// server process. Selecting only a subset would let the workload use
-			// capacity it did not request, so exact coverage is mandatory.
-			if candidates[index].candidate.Exclusive && int32(len(candidates[index].devices)) != count {
-				continue
-			}
-			ids := make([]string, count)
-			for deviceIndex := int32(0); deviceIndex < count; deviceIndex++ {
-				ids[deviceIndex] = candidates[index].devices[deviceIndex].ID
-			}
-			return contracts.Decision{
-				ProviderName: first.ProviderName,
-				PoolName:     first.PoolName,
-				Mode:         first.Mode,
-				Targets: []acceleratorv1alpha1.AllocationTarget{{
-					EndpointName: candidates[index].candidate.EndpointName,
-					DeviceIDs:    ids,
-					Exclusive:    candidates[index].candidate.Exclusive,
-				}},
-				Policy: LocalFirstPolicyName,
-				Reason: fmt.Sprintf("selected %d remote device(s) from endpoint %s in pool %s", count, candidates[index].candidate.EndpointName, first.PoolName),
-			}, true
-		}
-		for index := start; index < end && remaining > 0; index++ {
-			eligible := candidates[index]
-			if eligible.candidate.Exclusive {
-				continue
-			}
-			take := int32(len(eligible.devices))
-			if take > remaining {
-				take = remaining
-			}
-			if take == 0 {
-				continue
-			}
-			ids := make([]string, take)
-			for deviceIndex := int32(0); deviceIndex < take; deviceIndex++ {
-				ids[deviceIndex] = eligible.devices[deviceIndex].ID
-			}
-			targets = append(targets, acceleratorv1alpha1.AllocationTarget{
-				EndpointName: eligible.candidate.EndpointName,
-				DeviceIDs:    ids,
-			})
-			remaining -= take
-		}
-		if remaining == 0 {
-			return contracts.Decision{
-				ProviderName: first.ProviderName,
-				PoolName:     first.PoolName,
-				Mode:         first.Mode,
-				Targets:      targets,
-				Policy:       LocalFirstPolicyName,
-				Reason:       fmt.Sprintf("selected %d remote device(s) from pool %s", count, first.PoolName),
-			}, true
-		}
-		start = end
+		return contracts.Decision{ProviderName: c.ProviderName, PoolName: c.PoolName, Mode: c.Mode,
+			Targets: []acceleratorv1alpha1.AllocationTarget{{EndpointName: c.EndpointName, DeviceIDs: ids, Exclusive: true}},
+			Policy:  LocalFirstPolicyName, Reason: fmt.Sprintf("selected %d remote device(s) from endpoint %s in pool %s", count, c.EndpointName, c.PoolName)}, true
 	}
 	return contracts.Decision{}, false
 }

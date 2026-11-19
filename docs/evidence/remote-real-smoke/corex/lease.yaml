@@ -1,0 +1,81 @@
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorLease
+metadata:
+  annotations:
+    accelerator.qcrs.io/decision-policy: local-first-fit/v1
+    accelerator.qcrs.io/decision-reason: selected 1 remote device(s) from endpoint
+      corex-remote-server in pool corex-remote
+    accelerator.qcrs.io/workload-name: corex-remote-smoke
+  creationTimestamp: "2026-11-16T13:24:47Z"
+  generation: 1
+  labels:
+    accelerator.qcrs.io/workload: corex-remote-smoke
+    accelerator.qcrs.io/workload-uid: 2d3c1a77-b974-4ad9-8263-f2ee7bae8538
+  name: corex-remote-smoke-2d3c1a77-lease-1
+  namespace: default
+  ownerReferences:
+  - apiVersion: accelerator.qcrs.io/v1alpha1
+    blockOwnerDeletion: true
+    controller: true
+    kind: AcceleratorWorkload
+    name: corex-remote-smoke
+    uid: 2d3c1a77-b974-4ad9-8263-f2ee7bae8538
+  resourceVersion: "38998"
+  uid: 7e2299fb-e68b-4afc-bcbb-e64bc807ab6c
+spec:
+  driver: corex-remote
+  mode: Remote
+  owner:
+    apiVersion: accelerator.qcrs.io/v1alpha1
+    kind: AcceleratorWorkload
+    name: corex-remote-smoke
+    namespace: default
+    uid: 2d3c1a77-b974-4ad9-8263-f2ee7bae8538
+  poolRef:
+    name: corex-remote
+  providerRef:
+    name: corex-remote
+  request:
+    containerName: worker
+    count: 1
+    deviceType: GPU
+    memory: "0"
+    vendor: iluvatar
+  targets:
+  - deviceIDs:
+    - gpu-0
+    endpointName: corex-remote-server
+    exclusive: true
+  ttl: 5m0s
+  workloadGeneration: 2
+status:
+  binding:
+    endpoints:
+    - address: corex-remote-server-0.corex-remote-server.accelerator-system.svc.cluster.local:50051
+      name: corex-remote-server
+      runtime:
+        apiVersion: "3"
+        driver: corex-remote
+        version: corex-remote-arm64-4.4
+    id: remote/7e2299fb-e68b-4afc-bcbb-e64bc807ab6c
+  conditions:
+  - lastTransitionTime: "2026-11-16T13:24:50Z"
+    message: accelerator capacity was released
+    observedGeneration: 1
+    reason: Released
+    status: "False"
+    type: Reserved
+  - lastTransitionTime: "2026-11-16T13:24:47Z"
+    message: runtime configuration was injected and the workload Pod was created
+    observedGeneration: 1
+    reason: Materialized
+    status: "True"
+    type: RuntimeReady
+  observedGeneration: 1
+  phase: Released
+  podRef:
+    apiVersion: v1
+    kind: Pod
+    name: corex-remote-smoke-2d3c1a77
+    namespace: default
+    uid: f35afebd-081e-431e-83fe-20bc32388aeb

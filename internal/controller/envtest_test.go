@@ -14,6 +14,7 @@ import (
 	"github.com/qcrs/accelerator-control-plane/internal/contracts"
 	coordinationv1 "k8s.io/api/coordination/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
@@ -120,6 +121,20 @@ func TestCRDsAndAtomicEndpointClaimsWithEnvtest(t *testing.T) {
 		t.Fatalf("create Endpoint through CRD: %v", err)
 	}
 
+	observed := metav1.Now()
+	sessions := int32(0)
+	endpoint.Status = acceleratorv1alpha1.AcceleratorEndpointStatus{Health: acceleratorv1alpha1.DeviceHealthHealthy, ActiveSessions: &sessions, ObservedAt: &observed, Confidence: "Observed", ObservationSource: "remote-probe", Conditions: []metav1.Condition{{Type: "Ready", Status: metav1.ConditionTrue, Reason: "RuntimeObserved", LastTransitionTime: observed, ObservedGeneration: endpoint.Generation}}}
+	if err := kubeClient.Status().Update(ctx, endpoint); err != nil {
+		t.Fatalf("write observation status through CRD: %v", err)
+	}
+	saved := &acceleratorv1alpha1.AcceleratorEndpoint{}
+	if err := kubeClient.Get(ctx, client.ObjectKey{Name: endpoint.Name}, saved); err != nil {
+		t.Fatal(err)
+	}
+	if saved.Status.ActiveSessions == nil || *saved.Status.ActiveSessions != 0 || saved.Status.ObservedAt == nil || saved.Status.Confidence != "Observed" {
+		t.Fatalf("observation fields pruned or zero became Unknown: %+v", saved.Status)
+	}
+
 	ownerA := createEnvtestAllocationLease(t, ctx, kubeClient, "owner-a", endpoint.Name)
 	ownerB := createEnvtestAllocationLease(t, ctx, kubeClient, "owner-b", endpoint.Name)
 	claimer := &allocation.KubernetesEndpointClaimer{
@@ -146,6 +161,76 @@ func TestCRDsAndAtomicEndpointClaimsWithEnvtest(t *testing.T) {
 	if err := claimer.Claim(ctx, claimB); err != nil {
 		t.Fatalf("second owner could not claim after release: %v", err)
 	}
+	if err := claimer.Release(ctx, claimB); err != nil {
+		t.Fatal(err)
+	}
+	// Both requests cross a real API-server Create boundary concurrently.
+	type result struct {
+		claim allocation.EndpointClaim
+		err   error
+	}
+	start := make(chan struct{})
+	done := make(chan result, 2)
+	for _, claim := range []allocation.EndpointClaim{claimA, claimB} {
+		go func(claim allocation.EndpointClaim) { <-start; done <- result{claim, claimer.Claim(ctx, claim)} }(claim)
+	}
+	close(start)
+	winners := 0
+	var winner, loser allocation.EndpointClaim
+	for i := 0; i < 2; i++ {
+		r := <-done
+		if r.err == nil {
+			winners++
+			winner = r.claim
+		} else if contracts.IsErrorKind(r.err, contracts.ErrorKindConflict) {
+			loser = r.claim
+		} else {
+			t.Fatal(r.err)
+		}
+	}
+	if winners != 1 {
+		t.Fatalf("concurrent endpoint claims: %d winners", winners)
+	}
+	if err := claimer.Release(ctx, winner); err != nil {
+		t.Fatal(err)
+	}
+	if err := claimer.Claim(ctx, loser); err != nil {
+		t.Fatalf("waiting owner failed after release: %v", err)
+	}
+	if err := claimer.Release(ctx, loser); err != nil {
+		t.Fatal(err)
+	}
+	t.Run("stale status cannot undo committed Ready", func(t *testing.T) {
+		workload := &acceleratorv1alpha1.AcceleratorWorkload{
+			ObjectMeta: metav1.ObjectMeta{Name: "status-cas", Namespace: "accelerator-system"},
+			Spec: acceleratorv1alpha1.AcceleratorWorkloadSpec{
+				Accelerator: acceleratorv1alpha1.AcceleratorRequest{DeviceType: acceleratorv1alpha1.DeviceKindGPU, Count: 1},
+				PodTemplate: corev1.PodTemplateSpec{Spec: corev1.PodSpec{RestartPolicy: corev1.RestartPolicyNever,
+					Containers: []corev1.Container{{Name: "worker", Image: "unused.invalid/fixture"}}}},
+			},
+		}
+		if err := kubeClient.Create(ctx, workload); err != nil {
+			t.Fatal(err)
+		}
+		stale := workload.DeepCopy()
+		workload.Status.Fallback.ReadyObserved = true
+		if err := kubeClient.Status().Update(ctx, workload); err != nil {
+			t.Fatal(err)
+		}
+		before := stale.DeepCopy()
+		stale.Status.Phase = acceleratorv1alpha1.WorkloadPhasePending
+		patch := client.MergeFromWithOptions(before, client.MergeFromWithOptimisticLock{})
+		if err := kubeClient.Status().Patch(ctx, stale, patch); !apierrors.IsConflict(err) {
+			t.Fatalf("stale status patch must conflict, got %v", err)
+		}
+		if err := kubeClient.Get(ctx, client.ObjectKeyFromObject(workload), workload); err != nil {
+			t.Fatal(err)
+		}
+		if !workload.Status.Fallback.ReadyObserved {
+			t.Fatal("stale patch reverted committed ReadyObserved")
+		}
+	})
+
 }
 
 func stopWindowsEnvtestProcesses(assets string) error {

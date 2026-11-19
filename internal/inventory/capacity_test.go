@@ -121,8 +121,25 @@ func capacityEndpoint(name, poolName string, count int) *acceleratorv1alpha1.Acc
 			Runtime: acceleratorv1alpha1.RuntimeInfo{Driver: "cricket", Version: "v1"},
 			Devices: devices,
 		},
-		Status: acceleratorv1alpha1.AcceleratorEndpointStatus{Conditions: []metav1.Condition{{
-			Type: "Configured", Status: metav1.ConditionTrue, ObservedGeneration: 1,
+		Status: acceleratorv1alpha1.AcceleratorEndpointStatus{Health: acceleratorv1alpha1.DeviceHealthHealthy, Confidence: "Observed", ActiveSessions: new(int32), ObservedAt: timePointerForTest(), Conditions: []metav1.Condition{{
+			Type: "Ready", Status: metav1.ConditionTrue, ObservedGeneration: 1,
 		}}},
+	}
+}
+
+func timePointerForTest() *metav1.Time { now := metav1.Now(); return &now }
+
+func TestUnhealthyEndpointRetainsAdvertisedAndReservedCapacity(t *testing.T) {
+	pool := &acceleratorv1alpha1.AcceleratorPool{ObjectMeta: metav1.ObjectMeta{Name: "remote"}, Spec: acceleratorv1alpha1.AcceleratorPoolSpec{Location: acceleratorv1alpha1.ExecutionModeRemote, Remote: &acceleratorv1alpha1.RemotePoolConfig{}}}
+	endpoint := capacityEndpoint("held", pool.Name, 2)
+	endpoint.Spec.Devices[0].Health = acceleratorv1alpha1.DeviceHealthUnhealthy
+	lease := &acceleratorv1alpha1.AcceleratorLease{ObjectMeta: metav1.ObjectMeta{Name: "lease", Namespace: "default"}, Spec: acceleratorv1alpha1.AcceleratorLeaseSpec{Mode: acceleratorv1alpha1.ExecutionModeRemote, Targets: []acceleratorv1alpha1.AllocationTarget{{EndpointName: endpoint.Name, Exclusive: true}}}, Status: acceleratorv1alpha1.AcceleratorLeaseStatus{Phase: acceleratorv1alpha1.AllocationPhaseReleasing}}
+	kube := fake.NewClientBuilder().WithScheme(capacityTestScheme(t)).WithObjects(pool, endpoint, lease).Build()
+	capacity, ready, err := SummarizePoolCapacity(context.Background(), kube, pool, "cricket", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if capacity.Total != 2 || capacity.Reserved != 2 || capacity.Available != 0 || ready != 0 {
+		t.Fatalf("unhealthy reservation disappeared: %+v ready=%d", capacity, ready)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	acceleratorv1alpha1 "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
 	"github.com/qcrs/accelerator-control-plane/internal/contracts"
@@ -179,7 +180,7 @@ func remoteCandidates(
 	occupied RemoteOccupancy,
 	validator contracts.RemoteEndpointValidator,
 ) []contracts.Candidate {
-	if pool.Spec.Remote == nil {
+	if pool.Spec.Remote == nil || pool.Spec.Remote.AllocationMode == acceleratorv1alpha1.RemoteAllocationModeDevice {
 		return nil
 	}
 	selector, err := metav1.LabelSelectorAsSelector(&pool.Spec.Remote.EndpointSelector)
@@ -239,6 +240,10 @@ func remoteCandidates(
 			})
 		}
 		sort.Slice(freeDevices, func(i, j int) bool { return freeDevices[i].ID < freeDevices[j].ID })
+		available := int32(0)
+		if ready {
+			available = int32(len(freeDevices))
+		}
 		result = append(result, contracts.Candidate{
 			ID:           "remote/" + pool.Name + "/" + endpoint.Name,
 			ProviderName: pool.Spec.ProviderRef.Name,
@@ -249,7 +254,7 @@ func remoteCandidates(
 			EndpointName: endpoint.Name,
 			Exclusive:    exclusive,
 			Labels:       mergeLabels(pool.Labels, endpoint.Labels),
-			Available:    int32(len(freeDevices)),
+			Available:    available,
 			Devices:      freeDevices,
 			Ready:        ready,
 			Reason:       reason,
@@ -335,7 +340,7 @@ func endpointReady(
 			return false, fmt.Sprintf("Ready condition is %s: %s", condition.Status, condition.Message)
 		}
 	}
-	return true, ""
+	return contracts.EndpointObservedReady(endpoint, time.Now())
 }
 
 func nodeReady(node *corev1.Node) bool {

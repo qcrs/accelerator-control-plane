@@ -8,6 +8,8 @@ metadata:
     accelerator.qcrs.io/runtime: mlu-remote
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: mlu-remote-server
@@ -21,16 +23,21 @@ spec:
         kubernetes.io/arch: arm64
       containers:
         - name: server
-          image: mlu-remote-server:arm64
+          image: mlu-remote-server:arm64-observed-v4
           imagePullPolicy: IfNotPresent
           env:
             - name: MLU_REMOTE_BIND
               value: "0.0.0.0"
             - name: MLU_REMOTE_PORT
               value: "50051"
+            - name: MLU_REMOTE_OBSERVATION_PORT
+              value: "50052"
           ports:
             - name: remote
               containerPort: 50051
+              protocol: TCP
+            - name: observation
+              containerPort: 50052
               protocol: TCP
           securityContext:
             # The single-node hardware probe uses privileged mode while the
@@ -79,4 +86,8 @@ spec:
     - name: remote
       port: 50051
       targetPort: remote
+      protocol: TCP
+    - name: observation
+      port: 50052
+      targetPort: observation
       protocol: TCP

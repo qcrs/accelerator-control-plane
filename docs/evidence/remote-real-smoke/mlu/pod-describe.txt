@@ -1,0 +1,101 @@
+Name:             mlu-remote-smoke-31d8fb42
+Namespace:        default
+Priority:         0
+Service Account:  default
+Node:             server310p/192.168.31.244
+Start Time:       Mon, 16 Nov 2026 13:24:31 +0000
+Labels:           accelerator.qcrs.io/workload=mlu-remote-smoke
+                  accelerator.qcrs.io/workload-uid=31d8fb42-e031-4a60-838e-950293720e39
+                  app=mlu-remote-smoke
+Annotations:      accelerator.qcrs.io/endpoint: mlu-remote-server
+                  accelerator.qcrs.io/lease: mlu-remote-smoke-31d8fb42-lease-1
+                  accelerator.qcrs.io/mode: Remote
+                  accelerator.qcrs.io/pool: mlu-remote
+                  accelerator.qcrs.io/provider: mlu-remote
+                  accelerator.qcrs.io/runtime-init-containers: accelerator-runtime-setup
+                  accelerator.qcrs.io/workload-name: mlu-remote-smoke
+Status:           Succeeded
+IP:               10.42.0.79
+IPs:
+  IP:           10.42.0.79
+Controlled By:  AcceleratorWorkload/mlu-remote-smoke
+Init Containers:
+  accelerator-runtime-setup:
+    Container ID:  containerd://c14db3a9eb91d3cc239bb938171f7875e0d0326d4def525b0740b6acc50d66bc
+    Image:         mlu-remote-client:arm64
+    Image ID:      sha256:53fdff68bc5b89dca26e788ba5b0931557c8068b5ac01828239d0eca21634010
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      /bin/cp
+    Args:
+      -a
+      /opt/mlu-remote/lib/.
+      /runtime/
+    State:          Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Mon, 16 Nov 2026 13:24:32 +0000
+      Finished:     Mon, 16 Nov 2026 13:24:32 +0000
+    Ready:          True
+    Restart Count:  0
+    Environment:    <none>
+    Mounts:
+      /runtime from accelerator-runtime (rw)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-gmf2h (ro)
+Containers:
+  worker:
+    Container ID:  containerd://cdf5c0d761a9aa91feaa84bdfda24544e711fac17f80d1dbe3818bdf40e6f53b
+    Image:         mlu-workload:arm64
+    Image ID:      sha256:1412312f6bc3d7d13ebaec338231d9d993598feabcbd275b41e9e1aa7ac7de37
+    Port:          <none>
+    Host Port:     <none>
+    Command:
+      /opt/workload/mlu-remote-client-test
+    State:          Terminated
+      Reason:       Completed
+      Exit Code:    0
+      Started:      Mon, 16 Nov 2026 13:24:32 +0000
+      Finished:     Mon, 16 Nov 2026 13:24:32 +0000
+    Ready:          False
+    Restart Count:  0
+    Environment:
+      MLU_REMOTE_HOST:  mlu-remote-server.accelerator-system.svc
+      MLU_REMOTE_PORT:  50051
+      LD_PRELOAD:       /opt/accelerator/mlu/shim/libcnrt.so:/opt/accelerator/mlu/driver-shim/libcndrv.so
+      LD_LIBRARY_PATH:  /opt/accelerator/mlu:/opt/accelerator/mlu/shim:/opt/accelerator/mlu/driver-shim
+    Mounts:
+      /opt/accelerator/mlu from accelerator-runtime (ro)
+      /var/run/secrets/kubernetes.io/serviceaccount from kube-api-access-gmf2h (ro)
+Conditions:
+  Type                        Status
+  PodReadyToStartContainers   False 
+  Initialized                 True 
+  Ready                       False 
+  ContainersReady             False 
+  PodScheduled                True 
+Volumes:
+  accelerator-runtime:
+    Type:       EmptyDir (a temporary directory that shares a pod's lifetime)
+    Medium:     
+    SizeLimit:  <unset>
+  kube-api-access-gmf2h:
+    Type:                    Projected (a volume that contains injected data from multiple sources)
+    TokenExpirationSeconds:  3607
+    ConfigMapName:           kube-root-ca.crt
+    Optional:                false
+    DownwardAPI:             true
+QoS Class:                   BestEffort
+Node-Selectors:              <none>
+Tolerations:                 node.kubernetes.io/not-ready:NoExecute op=Exists for 300s
+                             node.kubernetes.io/unreachable:NoExecute op=Exists for 300s
+Events:
+  Type    Reason     Age   From               Message
+  ----    ------     ----  ----               -------
+  Normal  Scheduled  5s    default-scheduler  Successfully assigned default/mlu-remote-smoke-31d8fb42 to server310p
+  Normal  Pulled     4s    kubelet            spec.initContainers{accelerator-runtime-setup}: Container image "mlu-remote-client:arm64" already present on machine and can be accessed by the pod
+  Normal  Created    4s    kubelet            spec.initContainers{accelerator-runtime-setup}: Container created
+  Normal  Started    4s    kubelet            spec.initContainers{accelerator-runtime-setup}: Container started
+  Normal  Pulled     4s    kubelet            spec.containers{worker}: Container image "mlu-workload:arm64" already present on machine and can be accessed by the pod
+  Normal  Created    4s    kubelet            spec.containers{worker}: Container created
+  Normal  Started    4s    kubelet            spec.containers{worker}: Container started

@@ -1,0 +1,489 @@
+--- a/server/runtime_server.c
++++ b/server/runtime_server.c
+@@ -1,3 +1,4 @@
++#include "endpoint_observation.h"
+ #include <arpa/inet.h>
+ #include <cuda.h>
+ #include "corex_backend.h"
+@@ -1178,8 +1179,9 @@
+     return 0;
+ }
+ 
+-static void cleanup_session(ServerSession *session)
+-{
++static int cleanup_session(ServerSession *session)
++{
++    int failed = 0;
+     cleanup_graphs(session);
+     /*
+      * Gate 5E cleanup order:
+@@ -1196,6 +1198,7 @@
+             continue;
+ 
+         CUresult sr = corex_backend_stream_sync(session->streams[i].stream);
++        if (sr != CUDA_SUCCESS) failed = 1;
+ 
+         printf(
+             "cleanup stream_id=%llu sync_rc=%d\n",
+@@ -1217,6 +1220,7 @@
+         CUresult tr =
+             corex_backend_event_sync(
+                 session->transfers[i].done_event);
++        if (tr != CUDA_SUCCESS) failed = 1;
+ 
+         printf(
+             "cleanup transfer_id=%llu "
+@@ -1237,6 +1241,7 @@
+             continue;
+ 
+         CUresult er = corex_backend_event_destroy(session->events[i].event);
++        if (er != CUDA_SUCCESS) failed = 1;
+ 
+         printf(
+             "cleanup event_id=%llu destroy_rc=%d\n",
+@@ -1251,6 +1256,7 @@
+             continue;
+ 
+         CUresult dr = corex_backend_stream_destroy(session->streams[i].stream);
++        if (dr != CUDA_SUCCESS) failed = 1;
+ 
+         printf(
+             "cleanup stream_id=%llu destroy_rc=%d\n",
+@@ -1262,6 +1268,7 @@
+ 
+     if (g_ctx) {
+         CUresult r = corex_backend_context_sync();
++        if (r != CUDA_SUCCESS) failed = 1;
+         printf("cleanup_sync rc=%d\n", (int)r);
+     }
+ 
+@@ -1282,6 +1289,9 @@
+             imported_storage_released =
+                 corex_backend_mem_free(session->allocations[i].ptr) == CUDA_SUCCESS;
+ 
++        if (session->allocations[i].ptr && !session->allocations[i].parent_module_id &&
++            (!session->allocations[i].graph_id || session->allocations[i].graph_active) &&
++            !imported_storage_released) failed = 1;
+         if (session->allocations[i].pool_imported_pointer && imported_storage_released)
+             release_imported_pool_pointer(session,session->allocations[i].pool_id);
+         if (session->allocations[i].pool_imported_allocation && imported_storage_released)
+@@ -1315,8 +1325,7 @@
+             (unsigned long long)session->modules[i].id,
+             session->modules[i].name);
+ 
+-        if (session->modules[i].module)
+-            corex_backend_module_unload(session->modules[i].module);
++        if (session->modules[i].module && corex_backend_module_unload(session->modules[i].module) != CUDA_SUCCESS) failed = 1;
+ 
+         free(session->modules[i].image);
+ 
+@@ -1330,9 +1339,10 @@
+             CUresult restored=pool_write_attribute(default_pool->pool,attr,session->default_pool_attributes[attr-1]);
+             if (result==CUDA_SUCCESS) result=restored;
+         }
+-        (void)corex_backend_pool_trim(default_pool->pool,0);
++        if (corex_backend_pool_trim(default_pool->pool,0) != CUDA_SUCCESS) failed = 1;
+         (void)pool_write_attribute(default_pool->pool,6,0);
+         (void)pool_write_attribute(default_pool->pool,8,0);
++        if (result != CUDA_SUCCESS) failed = 1;
+         printf("cleanup default_pool_id=%llu restore_rc=%d\n",
+                (unsigned long long)default_pool->id,(int)result);
+     }
+@@ -1340,6 +1350,7 @@
+         PoolEntry *entry=&session->pools[i];
+         if (!entry->used || entry->is_default) continue;
+         CUresult result=corex_backend_pool_destroy(entry->pool);
++        if (result != CUDA_SUCCESS) failed = 1;
+         printf("cleanup pool_id=%llu destroy_rc=%d\n",(unsigned long long)entry->id,(int)result);
+         if (entry->is_shared_import && !entry->imported_pointer_refs &&
+             !entry->imported_allocation_refs)
+@@ -1347,7 +1358,8 @@
+     }
+ 
+     server_session_init(session);
+-    printf("SESSION_CLEANUP_EMPTY=YES\n");
++    printf("%s\n", failed ? "SESSION_CLEANUP_FAILED" : "SESSION_CLEANUP_EMPTY=YES");
++    return failed;
+ }
+ 
+ /* ============================================================
+@@ -5697,7 +5709,7 @@
+     int owner_release_status = cleanup_imports_status == 0
+         ? worker_broker_call(BROKER_OWNER_RELEASE_WAIT, NULL, -1, NULL)
+         : ST_INTERNAL;
+-    cleanup_session(session);
++    int cleanup_status = cleanup_session(session);
+     free(session);
+ 
+     result = corex_backend_context_destroy(g_ctx);
+@@ -5705,7 +5717,7 @@
+     printf("SESSION_CONTEXT_DESTROY rc=%d pid=%ld\n", (int)result, (long)getpid());
+     fflush(stdout);
+     return result == CUDA_SUCCESS && cleanup_imports_status == 0 &&
+-        owner_release_status == ST_OK ? 0 : 1;
++        owner_release_status == ST_OK && cleanup_status == 0 ? 0 : 1;
+ }
+ 
+ static void close_inherited_broker_fds(void)
+@@ -5734,6 +5746,32 @@
+     memset(worker, 0, sizeof(*worker));
+     close(worker_fd);
+     broker_drop_worker(worker_pid);
++}
++
++static pid_t observation_workers[MAX_WORKERS];
++static pid_t observation_probe_pid;
++static unsigned observation_cleanup_errors;
++
++static void serve_observation(int listener, int data_listener) {
++    int fd = observation_request(listener);
++    if (fd < 0) return;
++    if (observation_probe_pid) { observation_busy(fd); return; }
++    unsigned sessions = 0;
++    for (size_t i=0; i<MAX_WORKERS; ++i) if (observation_workers[i]) ++sessions;
++    pid_t child = fork();
++    if (child == 0) {
++        close(listener); close(data_listener); close_inherited_broker_fds();
++        alarm(2);
++        int capacity=0;
++        int healthy = corex_backend_init() == CUDA_SUCCESS &&
++            corex_backend_device_count(&capacity) == CUDA_SUCCESS && capacity > 0;
++        observation_reply(fd, "corex-remote", healthy && !observation_cleanup_errors,
++                          capacity, sessions, observation_cleanup_errors);
++        _exit(0);
++    }
++    if (child < 0) { observation_busy(fd); return; }
++    observation_probe_pid = child;
++    close(fd);
+ }
+ 
+ int main(void)
+@@ -5790,9 +5828,11 @@
+     printf("listen=%s:%d\n", listen_host, listen_port);
+     printf("SERVER_READY\n");
+ 
++    int observation_fd = observation_listen("COREX_REMOTE_OBSERVATION_PORT", listen_host);
++    if (observation_fd == -2) { perror("observation listen"); return 1; }
+     for (;;) {
+-        struct pollfd poll_fds[MAX_WORKERS + 1];
+-        size_t worker_indices[MAX_WORKERS + 1];
++        struct pollfd poll_fds[MAX_WORKERS + 2];
++        size_t worker_indices[MAX_WORKERS + 2];
+         nfds_t count = 1;
+         poll_fds[0] = (struct pollfd){.fd = listen_fd, .events = POLLIN};
+         worker_indices[0] = SIZE_MAX;
+@@ -5804,15 +5844,27 @@
+             worker_indices[count++] = i;
+         }
+ 
++        nfds_t observation_index = count;
++        if (observation_fd >= 0) poll_fds[count++] = (struct pollfd){.fd=observation_fd, .events=POLLIN};
+         int ready = poll(poll_fds, count, 250);
+-        while (waitpid(-1, NULL, WNOHANG) > 0) { }
++        int poll_error = errno;
++        int worker_status; pid_t reaped;
++        while ((reaped = waitpid(-1, &worker_status, WNOHANG)) > 0) {
++            if (reaped == observation_probe_pid) { observation_probe_pid=0; continue; }
++            for (size_t i=0; i<MAX_WORKERS; ++i) if (observation_workers[i] == reaped) {
++                observation_workers[i]=0;
++                if (!WIFEXITED(worker_status) || WEXITSTATUS(worker_status)) ++observation_cleanup_errors;
++                break;
++            }
++        }
+         if (ready < 0) {
+-            if (errno == EINTR)
++            if (poll_error == EINTR)
+                 continue;
++            errno=poll_error;
+             perror("poll");
+             break;
+         }
+-        for (nfds_t p = 1; p < count; ++p) {
++        for (nfds_t p = 1; p < observation_index; ++p) {
+             if (!poll_fds[p].revents)
+                 continue;
+             size_t index = worker_indices[p];
+@@ -5826,11 +5878,13 @@
+             }
+         }
+ 
++        if (observation_fd >= 0 && (poll_fds[observation_index].revents & POLLIN))
++            serve_observation(observation_fd, listen_fd);
+         if (!(poll_fds[0].revents & POLLIN))
+             continue;
+         size_t worker_slot = MAX_WORKERS;
+         for (size_t i = 0; i < MAX_WORKERS; ++i)
+-            if (!g_worker_channels[i].used) { worker_slot = i; break; }
++            if (!g_worker_channels[i].used && !observation_workers[i]) { worker_slot = i; break; }
+         if (worker_slot == MAX_WORKERS) {
+             int rejected = accept(listen_fd, NULL, NULL);
+             if (rejected >= 0)
+@@ -5863,6 +5917,7 @@
+         }
+         if (worker_pid == 0) {
+             close(listen_fd);
++            if (observation_fd >= 0) close(observation_fd);
+             close(broker_pair[0]);
+             close_inherited_broker_fds();
+             g_broker_fd = broker_pair[1];
+@@ -5880,6 +5935,7 @@
+         g_worker_channels[worker_slot] = (WorkerChannel){
+             .used = 1, .worker_pid = worker_pid, .fd = broker_pair[0],
+         };
++        observation_workers[worker_slot] = worker_pid;
+         printf("SESSION_ACCEPTED pid=%ld\n", (long)worker_pid);
+     }
+ 
+--- a/src/corex_remote_cuda.c
++++ b/src/corex_remote_cuda.c
+@@ -11,6 +11,11 @@
+ #include <arpa/inet.h>
+ #include <errno.h>
+ #include <netinet/in.h>
++#include <netinet/tcp.h>
++#include <netdb.h>
++#include <fcntl.h>
++#include <poll.h>
++#include <time.h>
+ #include <stdint.h>
+ #include <stdio.h>
+ #include <stdlib.h>
+@@ -172,27 +177,67 @@
+ 
+ static int connect_server(void)
+ {
+-    int fd = socket(AF_INET, SOCK_STREAM, 0);
+-    if (fd < 0)
+-        return -1;
+-
+-    struct sockaddr_in addr;
+     const char *host = remote_server_host();
+     int port = remote_server_port();
+-    memset(&addr, 0, sizeof(addr));
+-    addr.sin_family = AF_INET;
+-    addr.sin_port = htons((uint16_t)port);
+-
+-    if (inet_pton(AF_INET, host, &addr.sin_addr) != 1) {
+-        close(fd);
++    char service[16];
++    snprintf(service, sizeof(service), "%d", port);
++    struct addrinfo hints = {0}, *list = NULL;
++    hints.ai_socktype = SOCK_STREAM;
++    hints.ai_family = AF_UNSPEC;
++    int gai = getaddrinfo(host, service, &hints, &list);
++    if (gai != 0) {
++        fprintf(stderr, "COREX_REMOTE_RESOLVE_FAILED host=%s error=%s\n", host, gai_strerror(gai));
++        errno = EHOSTUNREACH;
+         return -1;
+     }
+-
+-    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+-        close(fd);
+-        return -1;
+-    }
+-
++    /* As in the MLU connector, DNS is outside the connection budget. All
++     * resolved addresses share one five-second monotonic connect deadline. */
++    struct timespec ts;
++    clock_gettime(CLOCK_MONOTONIC, &ts);
++    int64_t deadline = (int64_t)ts.tv_sec*1000 + ts.tv_nsec/1000000 + 5000;
++    int fd = -1, saved = ECONNREFUSED;
++    for (struct addrinfo *it = list; it; it = it->ai_next) {
++        clock_gettime(CLOCK_MONOTONIC, &ts);
++        int64_t remaining = deadline - ((int64_t)ts.tv_sec*1000 + ts.tv_nsec/1000000);
++        if (remaining <= 0) { saved = ETIMEDOUT; break; }
++        fd = socket(it->ai_family, it->ai_socktype, it->ai_protocol);
++        if (fd < 0) { saved = errno; continue; }
++        int flags = fcntl(fd, F_GETFL, 0), connected = 0;
++        if (flags >= 0 && fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0) {
++            int rc = connect(fd, it->ai_addr, it->ai_addrlen);
++            if (rc == 0) connected = 1;
++            else if (errno == EINPROGRESS || errno == EINTR) {
++                struct pollfd waiting = {.fd=fd, .events=POLLOUT};
++                for (;;) {
++                    clock_gettime(CLOCK_MONOTONIC, &ts);
++                    remaining = deadline - ((int64_t)ts.tv_sec*1000 + ts.tv_nsec/1000000);
++                    if (remaining <= 0) { errno=ETIMEDOUT; break; }
++                    rc = poll(&waiting, 1, (int)remaining);
++                    if (rc < 0 && errno == EINTR) continue;
++                    if (rc == 0) errno=ETIMEDOUT;
++                    if (rc > 0) {
++                        int error=0; socklen_t size=sizeof(error);
++                        if (getsockopt(fd,SOL_SOCKET,SO_ERROR,&error,&size) == 0) {
++                            if (!error) connected=1;
++                            else errno=error;
++                        }
++                    }
++                    break;
++                }
++            }
++        }
++        if (connected && fcntl(fd, F_SETFL, flags) == 0) {
++            int yes=1;
++            (void)setsockopt(fd,IPPROTO_TCP,TCP_NODELAY,&yes,sizeof(yes));
++            break;
++        }
++        saved=errno; close(fd); fd=-1;
++    }
++    freeaddrinfo(list);
++    if (fd < 0) {
++        fprintf(stderr,"COREX_REMOTE_CONNECT_FAILED host=%s port=%d error=%s\n",host,port,strerror(saved));
++        errno=saved;
++    }
+     return fd;
+ }
+ 
+--- a/tests/driver/driver_smoke.c
++++ b/tests/driver/driver_smoke.c
+@@ -2,9 +2,27 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
++#include <time.h>
++#include <unistd.h>
++
++static int trace_calls;
++
++static void trace_call(const char *call, const char *phase, int result)
++{
++    if (!trace_calls) return;
++    struct timespec now;
++    clock_gettime(CLOCK_MONOTONIC, &now);
++    fprintf(stderr, "DRIVER_SMOKE_CALL phase=%s pid=%ld time=%lld.%09ld api=%s",
++            phase, (long)getpid(), (long long)now.tv_sec, now.tv_nsec, call);
++    if (strcmp(phase, "END") == 0) fprintf(stderr, " rc=%d", result);
++    fputc('\n', stderr);
++    fflush(stderr);
++}
+ 
+ #define CHECK(call) do { \
++    trace_call(#call, "BEGIN", 0); \
+     CUresult _r = (call); \
++    trace_call(#call, "END", (int)_r); \
+     if (_r != CUDA_SUCCESS) { \
+         const char *_s = NULL; cuGetErrorString(_r, &_s); \
+         fprintf(stderr, "%s failed: %d %s\n", #call, (int)_r, _s ? _s : "?"); \
+@@ -29,7 +47,13 @@
+ int main(int argc, char **argv)
+ {
+     if (argc != 2) { fprintf(stderr, "usage: %s <cubin>\n", argv[0]); return 2; }
++    const char *trace = getenv("COREX_SMOKE_TRACE");
++    trace_calls = trace && strcmp(trace, "1") == 0;
+     int remote_loader = getenv("COREX_REMOTE_HOST") != NULL;
++    if (trace_calls) {
++        fprintf(stderr, "DRIVER_SMOKE_START pid=%ld image=%s\n", (long)getpid(), argv[1]);
++        fflush(stderr);
++    }
+     CHECK(cuInit(0));
+     int version = 0, count = 0;
+     CHECK(cuDriverGetVersion(&version));
+@@ -65,8 +89,17 @@
+     CHECK(cuEventRecord(event, stream));
+     CHECK(cuEventSynchronize(event));
+     CHECK(cuMemcpyDtoH(result, output, sizeof(result)));
+-    for (unsigned i = 0; i < sizeof(result); ++i)
+-        if (result[i] != (unsigned char)(host[i] + 1u)) return 1;
++    for (unsigned i = 0; i < sizeof(result); ++i) {
++        if (result[i] != (unsigned char)(host[i] + 1u)) {
++            fprintf(stderr, "DRIVER_SMOKE_NUMERICAL=FAIL index=%u got=%u expected=%u\n",
++                    i, (unsigned)result[i], (unsigned)(unsigned char)(host[i] + 1u));
++            return 1;
++        }
++    }
++    if (trace_calls) {
++        fprintf(stderr, "DRIVER_SMOKE_NUMERICAL=PASS bytes=%zu\n", sizeof(result));
++        fflush(stderr);
++    }
+     CHECK(cuEventQuery(event));
+     CHECK(cuStreamSynchronize(stream));
+     CHECK(cuModuleUnload(module));
+--- /dev/null
++++ b/server/endpoint_observation.h
+@@ -0,0 +1,87 @@
++/* Minimal read-only runtime management endpoint. No session or device context
++ * is allocated. Copy this header into each runtime's server/ directory.
++ * Management counts include admitted handshakes and cleanup in progress. */
++#ifndef ENDPOINT_OBSERVATION_H
++#define ENDPOINT_OBSERVATION_H
++#include <arpa/inet.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <poll.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/socket.h>
++#include <sys/time.h>
++#include <time.h>
++#include <unistd.h>
++
++static int observation_listen(const char *env_name, const char *bind_host) {
++    const char *port = getenv(env_name);
++    if (!port || !*port) return -1; /* opt-in; old servers remain compatible */
++    char *end; long n = strtol(port, &end, 10);
++    if (*end || n < 1 || n > 65535) return -2;
++    int fd = socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
++    if (fd < 0) return -2;
++    int yes = 1; setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
++    struct sockaddr_in addr; memset(&addr, 0, sizeof(addr));
++    addr.sin_family = AF_INET; addr.sin_port = htons((unsigned short)n);
++    if (inet_pton(AF_INET, bind_host, &addr.sin_addr) != 1 ||
++        bind(fd, (struct sockaddr *)&addr, sizeof(addr)) || listen(fd, 8) ||
++        fcntl(fd, F_SETFL, O_NONBLOCK)) { close(fd); return -2; }
++    return fd;
++}
++
++static int observation_request(int listener) {
++    int fd = accept(listener, NULL, NULL);
++    if (fd < 0) return -1;
++    struct timeval timeout = {.tv_sec = 0, .tv_usec = 500000};
++    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
++    char request[1024]; size_t used = 0;
++    struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
++    long long deadline = (long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000 + 500;
++    while (used < sizeof(request)-1) {
++        clock_gettime(CLOCK_MONOTONIC, &ts);
++        long long remaining = deadline - ((long long)ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
++        if (remaining <= 0) break;
++        struct pollfd p = {.fd=fd, .events=POLLIN};
++        if (poll(&p, 1, (int)remaining) <= 0) break;
++        ssize_t n = recv(fd, request+used, sizeof(request)-1-used, MSG_DONTWAIT);
++        if (n <= 0) break;
++        used += (size_t)n; request[used] = 0;
++        /* Consume all headers before replying and closing. Leaving header
++         * bytes unread can reset a fragmented TCP request after the reply. */
++        if (strstr(request, "\r\n\r\n")) {
++            if (strncmp(request, "GET /v1/observation HTTP/1.", 27) == 0) return fd;
++            break;
++        }
++    }
++    close(fd); return -1;
++}
++
++static void observation_send_close(int fd, const char *reply, size_t length) {
++    size_t offset = 0;
++    while (offset < length) {
++        ssize_t sent = send(fd, reply+offset, length-offset, MSG_NOSIGNAL);
++        if (sent < 0 && errno == EINTR) continue;
++        if (sent <= 0) break;
++        offset += (size_t)sent;
++    }
++    close(fd);
++}
++
++static inline void observation_busy(int fd) {
++    const char reply[] = "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";
++    observation_send_close(fd, reply, sizeof(reply)-1);
++}
++
++static void observation_reply(int fd, const char *driver, int healthy,
++                              int capacity, unsigned sessions, unsigned cleanup_errors) {
++    char body[512], reply[768];
++    int n = snprintf(body, sizeof(body),
++        "{\"schemaVersion\":1,\"driver\":\"%s\",\"healthy\":%s,\"capacity\":%d,\"activeSessions\":%u,\"cleanupErrors\":%u}\n",
++        driver, healthy ? "true" : "false", capacity, sessions, cleanup_errors);
++    int length = snprintf(reply, sizeof(reply),
++        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nCache-Control: no-store\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s", n, body);
++    observation_send_close(fd, reply, (size_t)length);
++}
++#endif

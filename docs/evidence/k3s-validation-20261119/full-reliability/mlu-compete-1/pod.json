@@ -1,0 +1,312 @@
+{
+  "apiVersion": "v1",
+  "kind": "Pod",
+  "metadata": {
+    "annotations": {
+      "accelerator.qcrs.io/endpoint": "mlu-remote-server",
+      "accelerator.qcrs.io/lease": "mlu-compete-1-25691809-lease-1",
+      "accelerator.qcrs.io/mode": "Remote",
+      "accelerator.qcrs.io/pool": "mlu-remote",
+      "accelerator.qcrs.io/provider": "mlu-remote",
+      "accelerator.qcrs.io/runtime-init-containers": "accelerator-runtime-setup",
+      "accelerator.qcrs.io/workload-name": "mlu-compete-1"
+    },
+    "creationTimestamp": "2026-11-19T09:45:44Z",
+    "generation": 1,
+    "labels": {
+      "accelerator.qcrs.io/workload": "mlu-compete-1",
+      "accelerator.qcrs.io/workload-uid": "25691809-8287-45a0-8db1-970388a6807a",
+      "app": "mlu-remote-smoke"
+    },
+    "name": "mlu-compete-1-25691809",
+    "namespace": "accelerator-validation-1119094357",
+    "ownerReferences": [
+      {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "blockOwnerDeletion": true,
+        "controller": true,
+        "kind": "AcceleratorWorkload",
+        "name": "mlu-compete-1",
+        "uid": "25691809-8287-45a0-8db1-970388a6807a"
+      }
+    ],
+    "resourceVersion": "266163",
+    "uid": "3ad3615c-4205-4c3e-940c-1b786bfd69a4"
+  },
+  "spec": {
+    "activeDeadlineSeconds": 240,
+    "automountServiceAccountToken": false,
+    "containers": [
+      {
+        "args": [
+          "for device in /dev/nvidia* /dev/iluvatar* /dev/cambricon* /dev/cndrv* /dev/davinci* /dev/ascend*; do\n  if [ -e \"$device\" ]; then echo \"FAIL local accelerator visible: $device\"; exit 80; fi\ndone\necho LOCAL_ACCELERATOR_DEVICES=NONE\ni=0\nwhile [ \"$i\" -lt 1 ]; do\n  /opt/workload/mlu-remote-custom-kernel-test\n  i=$((i + 1))\n  if [ \"$i\" -lt 1 ]; then sleep 2; fi\ndone\necho KERNEL_FINISHED\nsleep 25\nexit 0\n"
+        ],
+        "command": [
+          "/bin/sh",
+          "-ec"
+        ],
+        "env": [
+          {
+            "name": "MLU_REMOTE_HOST",
+            "value": "mlu-remote-server.accelerator-system.svc"
+          },
+          {
+            "name": "MLU_REMOTE_PORT",
+            "value": "50051"
+          },
+          {
+            "name": "LD_PRELOAD",
+            "value": "/opt/accelerator/mlu/shim/libcnrt.so:/opt/accelerator/mlu/driver-shim/libcndrv.so"
+          },
+          {
+            "name": "LD_LIBRARY_PATH",
+            "value": "/opt/accelerator/mlu:/opt/accelerator/mlu/shim:/opt/accelerator/mlu/driver-shim"
+          }
+        ],
+        "image": "mlu-workload:arm64-observed-v1",
+        "imagePullPolicy": "Never",
+        "name": "worker",
+        "resources": {
+          "limits": {
+            "memory": "128Mi"
+          },
+          "requests": {
+            "cpu": "10m",
+            "memory": "32Mi"
+          }
+        },
+        "securityContext": {
+          "allowPrivilegeEscalation": false,
+          "capabilities": {
+            "drop": [
+              "ALL"
+            ]
+          },
+          "runAsNonRoot": true,
+          "runAsUser": 65532
+        },
+        "terminationMessagePath": "/dev/termination-log",
+        "terminationMessagePolicy": "File",
+        "volumeMounts": [
+          {
+            "mountPath": "/opt/accelerator/mlu",
+            "name": "accelerator-runtime",
+            "readOnly": true
+          }
+        ]
+      }
+    ],
+    "dnsPolicy": "ClusterFirst",
+    "enableServiceLinks": true,
+    "initContainers": [
+      {
+        "args": [
+          "-a",
+          "/opt/mlu-remote/lib/.",
+          "/runtime/"
+        ],
+        "command": [
+          "/bin/cp"
+        ],
+        "image": "mlu-remote-client:arm64-observed-v1",
+        "imagePullPolicy": "IfNotPresent",
+        "name": "accelerator-runtime-setup",
+        "resources": {},
+        "terminationMessagePath": "/dev/termination-log",
+        "terminationMessagePolicy": "File",
+        "volumeMounts": [
+          {
+            "mountPath": "/runtime",
+            "name": "accelerator-runtime"
+          }
+        ]
+      }
+    ],
+    "nodeName": "server310p",
+    "preemptionPolicy": "PreemptLowerPriority",
+    "priority": 0,
+    "restartPolicy": "Never",
+    "schedulerName": "default-scheduler",
+    "securityContext": {},
+    "serviceAccount": "default",
+    "serviceAccountName": "default",
+    "terminationGracePeriodSeconds": 30,
+    "tolerations": [
+      {
+        "effect": "NoExecute",
+        "key": "node.kubernetes.io/not-ready",
+        "operator": "Exists",
+        "tolerationSeconds": 300
+      },
+      {
+        "effect": "NoExecute",
+        "key": "node.kubernetes.io/unreachable",
+        "operator": "Exists",
+        "tolerationSeconds": 300
+      }
+    ],
+    "volumes": [
+      {
+        "emptyDir": {},
+        "name": "accelerator-runtime"
+      }
+    ]
+  },
+  "status": {
+    "allocatedResources": {
+      "cpu": "10m",
+      "memory": "32Mi"
+    },
+    "conditions": [
+      {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-19T09:46:12Z",
+        "message": "pod sandbox is not ready",
+        "observedGeneration": 1,
+        "reason": "PodSandboxNotReady",
+        "status": "False",
+        "type": "PodReadyToStartContainers"
+      },
+      {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-19T09:45:45Z",
+        "observedGeneration": 1,
+        "reason": "PodCompleted",
+        "status": "True",
+        "type": "Initialized"
+      },
+      {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-19T09:46:10Z",
+        "observedGeneration": 1,
+        "reason": "PodCompleted",
+        "status": "False",
+        "type": "Ready"
+      },
+      {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-19T09:46:10Z",
+        "observedGeneration": 1,
+        "reason": "PodCompleted",
+        "status": "False",
+        "type": "ContainersReady"
+      },
+      {
+        "lastProbeTime": null,
+        "lastTransitionTime": "2026-11-19T09:45:44Z",
+        "observedGeneration": 1,
+        "status": "True",
+        "type": "PodScheduled"
+      }
+    ],
+    "containerStatuses": [
+      {
+        "allocatedResources": {
+          "cpu": "10m",
+          "memory": "32Mi"
+        },
+        "containerID": "containerd://4da80037b711076555261ac1b61890c785b29c86173b5768e732f8f2a42e331e",
+        "image": "docker.io/library/mlu-workload:arm64-observed-v1",
+        "imageID": "sha256:c432e32a8b756971dee86ea4821e93fc5cc27ff8cf67fa7f112a44d641bb6921",
+        "lastState": {},
+        "name": "worker",
+        "ready": false,
+        "resources": {
+          "limits": {
+            "memory": "128Mi"
+          },
+          "requests": {
+            "cpu": "10m",
+            "memory": "32Mi"
+          }
+        },
+        "restartCount": 0,
+        "started": false,
+        "state": {
+          "terminated": {
+            "containerID": "containerd://4da80037b711076555261ac1b61890c785b29c86173b5768e732f8f2a42e331e",
+            "exitCode": 0,
+            "finishedAt": "2026-11-19T09:46:10Z",
+            "reason": "Completed",
+            "startedAt": "2026-11-19T09:45:45Z"
+          }
+        },
+        "user": {
+          "linux": {
+            "gid": 0,
+            "supplementalGroups": [
+              0
+            ],
+            "uid": 65532
+          }
+        },
+        "volumeMounts": [
+          {
+            "mountPath": "/opt/accelerator/mlu",
+            "name": "accelerator-runtime",
+            "readOnly": true,
+            "recursiveReadOnly": "Disabled"
+          }
+        ]
+      }
+    ],
+    "hostIP": "192.168.31.244",
+    "hostIPs": [
+      {
+        "ip": "192.168.31.244"
+      }
+    ],
+    "initContainerStatuses": [
+      {
+        "containerID": "containerd://d27dda53b74d5780cf1ebf09c6c772812128464fcd4d3395cc671e9b939703e8",
+        "image": "docker.io/library/mlu-remote-client:arm64-observed-v1",
+        "imageID": "sha256:0d008972a3c73f33bc9f580bbfb714e5237fde2423ba182ed9d5f53e61e978be",
+        "lastState": {},
+        "name": "accelerator-runtime-setup",
+        "ready": true,
+        "resources": {},
+        "restartCount": 0,
+        "started": false,
+        "state": {
+          "terminated": {
+            "containerID": "containerd://d27dda53b74d5780cf1ebf09c6c772812128464fcd4d3395cc671e9b939703e8",
+            "exitCode": 0,
+            "finishedAt": "2026-11-19T09:45:44Z",
+            "reason": "Completed",
+            "startedAt": "2026-11-19T09:45:44Z"
+          }
+        },
+        "user": {
+          "linux": {
+            "gid": 0,
+            "supplementalGroups": [
+              0
+            ],
+            "uid": 0
+          }
+        },
+        "volumeMounts": [
+          {
+            "mountPath": "/runtime",
+            "name": "accelerator-runtime"
+          }
+        ]
+      }
+    ],
+    "observedGeneration": 1,
+    "phase": "Succeeded",
+    "podIP": "10.42.0.105",
+    "podIPs": [
+      {
+        "ip": "10.42.0.105"
+      }
+    ],
+    "qosClass": "Burstable",
+    "resources": {
+      "requests": {
+        "memory": "32Mi"
+      }
+    },
+    "startTime": "2026-11-19T09:45:44Z"
+  }
+}

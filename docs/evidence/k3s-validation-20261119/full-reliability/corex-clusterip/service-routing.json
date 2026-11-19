@@ -1,0 +1,54 @@
+{
+  "service": {
+    "apiVersion": "v1",
+    "kind": "Service",
+    "metadata": {
+      "creationTimestamp": "2026-11-19T09:52:10Z",
+      "labels": {
+        "accelerator.qcrs.io/validation": "accelerator-validation-1119094357"
+      },
+      "name": "corex-nat-1119094357",
+      "namespace": "accelerator-system",
+      "resourceVersion": "267229",
+      "uid": "307ba6b3-1cd9-49ef-86af-f8657096144e"
+    },
+    "spec": {
+      "clusterIP": "10.43.28.184",
+      "clusterIPs": [
+        "10.43.28.184"
+      ],
+      "internalTrafficPolicy": "Cluster",
+      "ipFamilies": [
+        "IPv4"
+      ],
+      "ipFamilyPolicy": "SingleStack",
+      "ports": [
+        {
+          "name": "remote",
+          "port": 50051,
+          "protocol": "TCP",
+          "targetPort": "remote"
+        },
+        {
+          "name": "observation",
+          "port": 50052,
+          "protocol": "TCP",
+          "targetPort": "observation"
+        }
+      ],
+      "selector": {
+        "app.kubernetes.io/name": "corex-remote-server"
+      },
+      "sessionAffinity": "None",
+      "type": "ClusterIP"
+    },
+    "status": {
+      "loadBalancer": {}
+    }
+  },
+  "backendPodIP": "10.42.0.119",
+  "serviceClusterIP": "10.43.28.184",
+  "endpointName": "corex-remote-server",
+  "temporaryAddress": "corex-nat-1119094357.accelerator-system.svc.cluster.local:50051",
+  "originalAddress": "corex-remote-server-0.corex-remote-server.accelerator-system.svc.cluster.local:50051"
+}

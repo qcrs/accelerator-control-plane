@@ -1,0 +1,18 @@
+{
+  "node": "server310p",
+  "files": {
+    "/etc/systemd/system/k3s.service.d/90-accelerator-no-proxy.conf": "# accelerator-control-plane: internal K3s traffic bypasses the external proxy\n[Service]\nEnvironmentFile=/etc/systemd/system/k3s-accelerator-no-proxy.env\n",
+    "/etc/systemd/system/k3s-accelerator-no-proxy.env": "# accelerator-control-plane: internal K3s traffic bypasses the external proxy\nNO_PROXY='localhost,127.0.0.1,::1,server310p,.svc,.cluster.local,cluster.local,192.168.31.244,10.42.0.0/24'\nno_proxy='localhost,127.0.0.1,::1,server310p,.svc,.cluster.local,cluster.local,192.168.31.244,10.42.0.0/24'\n"
+  },
+  "restarts": [
+    "k3s"
+  ],
+  "originalEnvironmentFileModified": false,
+  "rollbackCommands": [
+    "sudo unlink /etc/systemd/system/k3s.service.d/90-accelerator-no-proxy.conf",
+    "sudo unlink /etc/systemd/system/k3s-accelerator-no-proxy.env",
+    "sudo systemctl daemon-reload",
+    "sudo systemctl restart k3s"
+  ]
+}
+PLAN ONLY: no files written and no service restarted.

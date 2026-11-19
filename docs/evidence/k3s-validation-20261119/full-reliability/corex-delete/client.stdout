@@ -1,0 +1,94 @@
+LOCAL_ACCELERATOR_DEVICES=NONE
+DRIVER_SMOKE_START pid=7 image=/opt/workload/driver_kernel.cubin
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.237861900 api=cuInit(0)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.257025763 api=cuInit(0) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.257044353 api=cuDriverGetVersion(&version)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.304066564 api=cuDriverGetVersion(&version) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.304082484 api=cuDeviceGetCount(&count)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.304086484 api=cuDeviceGetCount(&count) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.304089984 api=cuDeviceGet(&device, 0)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.304092224 api=cuDeviceGet(&device, 0) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.304094904 api=cuDeviceGetName(name, (int)sizeof(name), device)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.348052187 api=cuDeviceGetName(name, (int)sizeof(name), device) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.348064007 api=cuDeviceTotalMem(&total, device)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.392082511 api=cuDeviceTotalMem(&total, device) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.392105281 api=cuDeviceGetAttribute(&warp, CU_DEVICE_ATTRIBUTE_WARP_SIZE, device)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.440142361 api=cuDeviceGetAttribute(&warp, CU_DEVICE_ATTRIBUTE_WARP_SIZE, device) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.440172862 api=cuCtxCreate(&context, 0, device)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.440186402 api=cuCtxCreate(&context, 0, device) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.440189842 api=cuMemAlloc(&input, 256)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.484140324 api=cuMemAlloc(&input, 256) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.484159005 api=cuMemAlloc_v2(&output, 256)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.528106047 api=cuMemAlloc_v2(&output, 256) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.528120737 api=cuMemcpyHtoD(input, host, sizeof(host))
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.528262980 api=cuMemcpyHtoD(input, host, sizeof(host)) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.528268690 api=cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.572124221 api=cuStreamCreate(&stream, CU_STREAM_NON_BLOCKING) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.572137101 api=cuEventCreate(&event, CU_EVENT_DEFAULT)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.620060079 api=cuEventCreate(&event, CU_EVENT_DEFAULT) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.620069409 api=cuMemcpyDtoDAsync(output, input, sizeof(host), stream)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.620150841 api=cuMemcpyDtoDAsync(output, input, sizeof(host), stream) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.620257933 api=cuModuleLoadData(&module, image)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.664065012 api=cuModuleLoadData(&module, image) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.664074002 api=cuModuleGetFunction(&function, module, "driver_add")
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.708184108 api=cuModuleGetFunction(&function, module, "driver_add") rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.708191798 api=cuLaunchKernel(function, 1, 1, 1, 256, 1, 1, 0, stream, args, NULL)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.708294260 api=cuLaunchKernel(function, 1, 1, 1, 256, 1, 1, 0, stream, args, NULL) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.708299960 api=cuEventRecord(event, stream)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.708369561 api=cuEventRecord(event, stream) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.708374192 api=cuEventSynchronize(event)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.708513074 api=cuEventSynchronize(event) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.708518404 api=cuMemcpyDtoH(result, output, sizeof(result))
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.756083805 api=cuMemcpyDtoH(result, output, sizeof(result)) rc=0
+DRIVER_SMOKE_NUMERICAL=PASS bytes=256
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.756096045 api=cuEventQuery(event)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.800096769 api=cuEventQuery(event) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.800106809 api=cuStreamSynchronize(stream)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.800247992 api=cuStreamSynchronize(stream) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.800254742 api=cuModuleUnload(module)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.800482716 api=cuModuleUnload(module) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.800490516 api=cuEventDestroy(event)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.800695630 api=cuEventDestroy(event) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.800703640 api=cuStreamDestroy(stream)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.801417534 api=cuStreamDestroy(stream) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.801427034 api=cuMemFree(input)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.801521556 api=cuMemFree(input) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.801527106 api=cuMemFree_v2(output)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.801632158 api=cuMemFree_v2(output) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.801638358 api=cuCtxPopCurrent(&context)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.801640758 api=cuCtxPopCurrent(&context) rc=0
+DRIVER_SMOKE_CALL phase=BEGIN pid=7 time=2415715.801643358 api=cuCtxDestroy(context)
+DRIVER_SMOKE_CALL phase=END pid=7 time=2415715.802263200 api=cuCtxDestroy(context) rc=0
+G6A_VA_ARENA base=0xffefb07a0000 bytes=68719476736 protection=PROT_NONE
+M2_S2_HELLO=NEGOTIATED server=1.1.0 backend=1 backend_version=10020 devices=1 profile=1 capabilities=10
+G6E_REMOTE_SESSION=CONNECTED generation=1 host=corex-remote-server-0.corex-remote-server.accelerator-system.svc.cluster.local port=50051 protocol=CRX9 version=3 default_stream=LEGACY
+G6A_CUDA_MALLOC ptr=0xffefb07a0000 allocation_id=1 bytes=256 span=131072 result=PASS
+G6A_CUDA_MALLOC ptr=0xffefb07c0000 allocation_id=2 bytes=256 span=131072 result=PASS
+G6A_PTR_RESOLVE ptr=0xffefb07a0000 allocation_id=1 offset=0 bytes=256
+G6A_CUDA_MEMCPY kind=H2D allocation_id=1 offset=0 bytes=256 result=PASS
+G6C_CUDA_STREAM_CREATE handle=0xffffb0826488 stream_id=1 result=PASS
+G6A_PTR_RESOLVE ptr=0xffefb07c0000 allocation_id=2 offset=0 bytes=256
+G6A_PTR_RESOLVE ptr=0xffefb07a0000 allocation_id=1 offset=0 bytes=256
+G7E_ABI_ARG kernel_id=1 name=driver_add arg=0 meta_kind=global_buffer offset=0 size=8 normalized=DEVICE_PTR
+G7E_ABI_ARG kernel_id=1 name=driver_add arg=1 meta_kind=by_value offset=8 size=4 normalized=BY_VALUE
+G7E_ABI_ATTACH generation=0 module_id=1 kernel_id=1 name=driver_add argc=2 kernarg_size=12 kernarg_align=8 abi=READY result=PASS
+G6A_PTR_RESOLVE ptr=0xffefb07c0000 allocation_id=2 offset=0 bytes=1
+G6D_LAUNCH_ARG arg=0 kind=REMOTE_PTR allocation_id=2 offset=0
+G6D_LAUNCH_ARG arg=1 kind=RAW_VALUE bytes=4
+G6E_CUDA_EVENT_RECORD event_handle=0xffffb0838488 event_id=1 stream_handle=0xffffb0826488 stream_id=1 frontier_snapshot=YES result=PASS
+G6E_CUDA_EVENT_SYNC handle=0xffffb0838488 event_id=1 host_visible=YES result=PASS
+G6A_PTR_RESOLVE ptr=0xffefb07c0000 allocation_id=2 offset=0 bytes=256
+G6A_CUDA_MEMCPY kind=D2H allocation_id=2 offset=0 bytes=256 result=PASS
+G6E_CUDA_EVENT_QUERY handle=0xffffb0838488 event_id=1 state=READY
+G6E_CUDA_STREAM_SYNC handle=0xffffb0826488 stream_id=1 host_visible=YES result=PASS
+G6D_KERNEL_TOKEN_INVALIDATE token=0xffffb0bce6f0 host_fun=(nil) kernel_id=1 module_id=1 name=driver_add origin=CONTROLLED
+G6D_MODULE_UNLOAD handle=0xffffb0bccef0 module_id=1 result=PASS tombstone=YES
+G6C_CUDA_EVENT_DESTROY handle=0xffffb0838488 event_id=1 covered_transfers_drained=YES result=PASS tombstone=YES
+G6C_CUDA_STREAM_DESTROY handle=0xffffb0826488 stream_id=1 hidden_transfers_drained=YES result=PASS tombstone=YES
+G6A_CUDA_FREE ptr=0xffefb07a0000 allocation_id=1 result=PASS tombstone=YES
+G6A_CUDA_FREE ptr=0xffefb07c0000 allocation_id=2 result=PASS tombstone=YES
+G6E_CUDA_DEVICE_SYNCHRONIZE hidden_transfers=0 result=PASS
+M1_S2_RUNTIME_SHUTDOWN generation=1 state=DISCONNECTED result=PASS
+DRIVER_SHIM_PASS version=10020 device=Iluvatar MR-V100 total=34359738368 warp=64
+M1_S2_RUNTIME_SHUTDOWN state=DISCONNECTED action=NOOP result=PASS
+KERNEL_FINISHED

@@ -1,0 +1,443 @@
+{
+  "items": [
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "annotations": {
+          "deployment.kubernetes.io/revision": "10",
+          "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"apps/v1\",\"kind\":\"Deployment\",\"metadata\":{\"annotations\":{\"deployment.kubernetes.io/revision\":\"8\"},\"name\":\"accelerator-manager\",\"namespace\":\"accelerator-system\"},\"spec\":{\"progressDeadlineSeconds\":600,\"replicas\":2,\"revisionHistoryLimit\":10,\"selector\":{\"matchLabels\":{\"app.kubernetes.io/name\":\"accelerator-control-plane\"}},\"strategy\":{\"rollingUpdate\":{\"maxSurge\":\"25%\",\"maxUnavailable\":\"25%\"},\"type\":\"RollingUpdate\"},\"template\":{\"metadata\":{\"annotations\":{\"kubectl.kubernetes.io/restartedAt\":\"2026-11-16T12:47:10Z\"},\"labels\":{\"app.kubernetes.io/name\":\"accelerator-control-plane\"}},\"spec\":{\"containers\":[{\"args\":[\"--leader-elect=true\",\"--metrics-bind-address=:8080\",\"--health-probe-bind-address=:8081\",\"--coordination-namespace=accelerator-system\"],\"image\":\"accelerator-control-plane:arm64-logic-20261119-v3\",\"imagePullPolicy\":\"Never\",\"livenessProbe\":{\"failureThreshold\":3,\"httpGet\":{\"path\":\"/healthz\",\"port\":\"health\",\"scheme\":\"HTTP\"},\"periodSeconds\":10,\"successThreshold\":1,\"timeoutSeconds\":1},\"name\":\"manager\",\"ports\":[{\"containerPort\":8080,\"name\":\"metrics\",\"protocol\":\"TCP\"},{\"containerPort\":8081,\"name\":\"health\",\"protocol\":\"TCP\"}],\"readinessProbe\":{\"failureThreshold\":3,\"httpGet\":{\"path\":\"/readyz\",\"port\":\"health\",\"scheme\":\"HTTP\"},\"periodSeconds\":10,\"successThreshold\":1,\"timeoutSeconds\":1},\"resources\":{\"limits\":{\"cpu\":\"1\",\"memory\":\"512Mi\"},\"requests\":{\"cpu\":\"100m\",\"memory\":\"128Mi\"}},\"securityContext\":{\"allowPrivilegeEscalation\":false,\"capabilities\":{\"drop\":[\"ALL\"]},\"readOnlyRootFilesystem\":true},\"terminationMessagePath\":\"/dev/termination-log\",\"terminationMessagePolicy\":\"File\"}],\"dnsPolicy\":\"ClusterFirst\",\"restartPolicy\":\"Always\",\"schedulerName\":\"default-scheduler\",\"securityContext\":{\"runAsNonRoot\":true,\"seccompProfile\":{\"type\":\"RuntimeDefault\"}},\"serviceAccount\":\"accelerator-manager\",\"serviceAccountName\":\"accelerator-manager\",\"terminationGracePeriodSeconds\":10}}}}\n"
+        },
+        "creationTimestamp": "2026-11-16T02:45:07Z",
+        "generation": 10,
+        "name": "accelerator-manager",
+        "namespace": "accelerator-system",
+        "resourceVersion": "267022",
+        "uid": "1d1a317d-305a-4a49-9f6c-cba6e60e92e6"
+      },
+      "spec": {
+        "progressDeadlineSeconds": 600,
+        "replicas": 2,
+        "revisionHistoryLimit": 10,
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "accelerator-control-plane"
+          }
+        },
+        "strategy": {
+          "rollingUpdate": {
+            "maxSurge": "25%",
+            "maxUnavailable": "25%"
+          },
+          "type": "RollingUpdate"
+        },
+        "template": {
+          "metadata": {
+            "annotations": {
+              "kubectl.kubernetes.io/restartedAt": "2026-11-19T09:50:17Z"
+            },
+            "labels": {
+              "app.kubernetes.io/name": "accelerator-control-plane"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "args": [
+                  "--leader-elect=true",
+                  "--metrics-bind-address=:8080",
+                  "--health-probe-bind-address=:8081",
+                  "--coordination-namespace=accelerator-system"
+                ],
+                "image": "accelerator-control-plane:arm64-logic-20261119-v3",
+                "imagePullPolicy": "Never",
+                "livenessProbe": {
+                  "failureThreshold": 3,
+                  "httpGet": {
+                    "path": "/healthz",
+                    "port": "health",
+                    "scheme": "HTTP"
+                  },
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "timeoutSeconds": 1
+                },
+                "name": "manager",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "name": "metrics",
+                    "protocol": "TCP"
+                  },
+                  {
+                    "containerPort": 8081,
+                    "name": "health",
+                    "protocol": "TCP"
+                  }
+                ],
+                "readinessProbe": {
+                  "failureThreshold": 3,
+                  "httpGet": {
+                    "path": "/readyz",
+                    "port": "health",
+                    "scheme": "HTTP"
+                  },
+                  "periodSeconds": 10,
+                  "successThreshold": 1,
+                  "timeoutSeconds": 1
+                },
+                "resources": {
+                  "limits": {
+                    "cpu": "1",
+                    "memory": "512Mi"
+                  },
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  }
+                },
+                "securityContext": {
+                  "allowPrivilegeEscalation": false,
+                  "capabilities": {
+                    "drop": [
+                      "ALL"
+                    ]
+                  },
+                  "readOnlyRootFilesystem": true
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "terminationMessagePolicy": "File"
+              }
+            ],
+            "dnsPolicy": "ClusterFirst",
+            "restartPolicy": "Always",
+            "schedulerName": "default-scheduler",
+            "securityContext": {
+              "runAsNonRoot": true,
+              "seccompProfile": {
+                "type": "RuntimeDefault"
+              }
+            },
+            "serviceAccount": "accelerator-manager",
+            "serviceAccountName": "accelerator-manager",
+            "terminationGracePeriodSeconds": 10
+          }
+        }
+      },
+      "status": {
+        "availableReplicas": 2,
+        "conditions": [
+          {
+            "lastTransitionTime": "2026-11-16T02:47:31Z",
+            "lastUpdateTime": "2026-11-16T02:47:31Z",
+            "message": "Deployment has minimum availability.",
+            "reason": "MinimumReplicasAvailable",
+            "status": "True",
+            "type": "Available"
+          },
+          {
+            "lastTransitionTime": "2026-11-16T02:45:07Z",
+            "lastUpdateTime": "2026-11-19T09:50:19Z",
+            "message": "ReplicaSet \"accelerator-manager-7455cbdf97\" has successfully progressed.",
+            "reason": "NewReplicaSetAvailable",
+            "status": "True",
+            "type": "Progressing"
+          }
+        ],
+        "observedGeneration": 10,
+        "readyReplicas": 2,
+        "replicas": 2,
+        "terminatingReplicas": 0,
+        "updatedReplicas": 2
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "annotations": {
+          "deployment.kubernetes.io/revision": "5",
+          "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"apps/v1\",\"kind\":\"Deployment\",\"metadata\":{\"annotations\":{},\"labels\":{\"accelerator.qcrs.io/runtime\":\"mlu-remote\",\"app.kubernetes.io/name\":\"mlu-remote-server\"},\"name\":\"mlu-remote-server\",\"namespace\":\"accelerator-system\"},\"spec\":{\"replicas\":1,\"selector\":{\"matchLabels\":{\"app.kubernetes.io/name\":\"mlu-remote-server\"}},\"strategy\":{\"type\":\"Recreate\"},\"template\":{\"metadata\":{\"labels\":{\"accelerator.qcrs.io/runtime\":\"mlu-remote\",\"app.kubernetes.io/name\":\"mlu-remote-server\"}},\"spec\":{\"containers\":[{\"env\":[{\"name\":\"MLU_REMOTE_BIND\",\"value\":\"0.0.0.0\"},{\"name\":\"MLU_REMOTE_PORT\",\"value\":\"50051\"},{\"name\":\"MLU_REMOTE_OBSERVATION_PORT\",\"value\":\"50052\"}],\"image\":\"mlu-remote-server:arm64-observed-v4\",\"imagePullPolicy\":\"Never\",\"name\":\"server\",\"ports\":[{\"containerPort\":50051,\"name\":\"remote\",\"protocol\":\"TCP\"},{\"containerPort\":50052,\"name\":\"observation\",\"protocol\":\"TCP\"}],\"securityContext\":{\"privileged\":true},\"volumeMounts\":[{\"mountPath\":\"/dev/cambricon_ctl\",\"name\":\"cambricon-ctl\"},{\"mountPath\":\"/dev/cambricon_dev0\",\"name\":\"cambricon-dev0\"},{\"mountPath\":\"/dev/cambricon_gdr\",\"name\":\"cambricon-gdr\"},{\"mountPath\":\"/dev/cambricon_ipcm0\",\"name\":\"cambricon-ipcm0\"}]}],\"nodeSelector\":{\"kubernetes.io/arch\":\"arm64\"},\"volumes\":[{\"hostPath\":{\"path\":\"/dev/cambricon_ctl\",\"type\":\"CharDevice\"},\"name\":\"cambricon-ctl\"},{\"hostPath\":{\"path\":\"/dev/cambricon_dev0\",\"type\":\"CharDevice\"},\"name\":\"cambricon-dev0\"},{\"hostPath\":{\"path\":\"/dev/cambricon_gdr\",\"type\":\"CharDevice\"},\"name\":\"cambricon-gdr\"},{\"hostPath\":{\"path\":\"/dev/cambricon_ipcm0\",\"type\":\"CharDevice\"},\"name\":\"cambricon-ipcm0\"}]}}}}\n"
+        },
+        "creationTimestamp": "2026-11-16T03:42:22Z",
+        "generation": 10,
+        "labels": {
+          "accelerator.qcrs.io/runtime": "mlu-remote",
+          "app.kubernetes.io/name": "mlu-remote-server"
+        },
+        "name": "mlu-remote-server",
+        "namespace": "accelerator-system",
+        "resourceVersion": "266795",
+        "uid": "70a2fa60-74d8-4593-9fe2-1f04cca7eb10"
+      },
+      "spec": {
+        "progressDeadlineSeconds": 600,
+        "replicas": 1,
+        "revisionHistoryLimit": 10,
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "mlu-remote-server"
+          }
+        },
+        "strategy": {
+          "type": "Recreate"
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "accelerator.qcrs.io/runtime": "mlu-remote",
+              "app.kubernetes.io/name": "mlu-remote-server"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "env": [
+                  {
+                    "name": "MLU_REMOTE_BIND",
+                    "value": "0.0.0.0"
+                  },
+                  {
+                    "name": "MLU_REMOTE_PORT",
+                    "value": "50051"
+                  },
+                  {
+                    "name": "MLU_REMOTE_OBSERVATION_PORT",
+                    "value": "50052"
+                  }
+                ],
+                "image": "mlu-remote-server:arm64-observed-v4",
+                "imagePullPolicy": "Never",
+                "name": "server",
+                "ports": [
+                  {
+                    "containerPort": 50051,
+                    "name": "remote",
+                    "protocol": "TCP"
+                  },
+                  {
+                    "containerPort": 50052,
+                    "name": "observation",
+                    "protocol": "TCP"
+                  }
+                ],
+                "resources": {},
+                "securityContext": {
+                  "privileged": true
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "terminationMessagePolicy": "File",
+                "volumeMounts": [
+                  {
+                    "mountPath": "/dev/cambricon_ctl",
+                    "name": "cambricon-ctl"
+                  },
+                  {
+                    "mountPath": "/dev/cambricon_dev0",
+                    "name": "cambricon-dev0"
+                  },
+                  {
+                    "mountPath": "/dev/cambricon_gdr",
+                    "name": "cambricon-gdr"
+                  },
+                  {
+                    "mountPath": "/dev/cambricon_ipcm0",
+                    "name": "cambricon-ipcm0"
+                  }
+                ]
+              }
+            ],
+            "dnsPolicy": "ClusterFirst",
+            "nodeSelector": {
+              "kubernetes.io/arch": "arm64"
+            },
+            "restartPolicy": "Always",
+            "schedulerName": "default-scheduler",
+            "securityContext": {},
+            "terminationGracePeriodSeconds": 30,
+            "volumes": [
+              {
+                "hostPath": {
+                  "path": "/dev/cambricon_ctl",
+                  "type": "CharDevice"
+                },
+                "name": "cambricon-ctl"
+              },
+              {
+                "hostPath": {
+                  "path": "/dev/cambricon_dev0",
+                  "type": "CharDevice"
+                },
+                "name": "cambricon-dev0"
+              },
+              {
+                "hostPath": {
+                  "path": "/dev/cambricon_gdr",
+                  "type": "CharDevice"
+                },
+                "name": "cambricon-gdr"
+              },
+              {
+                "hostPath": {
+                  "path": "/dev/cambricon_ipcm0",
+                  "type": "CharDevice"
+                },
+                "name": "cambricon-ipcm0"
+              }
+            ]
+          }
+        }
+      },
+      "status": {
+        "availableReplicas": 1,
+        "conditions": [
+          {
+            "lastTransitionTime": "2026-11-16T03:42:22Z",
+            "lastUpdateTime": "2026-11-19T09:42:36Z",
+            "message": "ReplicaSet \"mlu-remote-server-579b7f5c9f\" has successfully progressed.",
+            "reason": "NewReplicaSetAvailable",
+            "status": "True",
+            "type": "Progressing"
+          },
+          {
+            "lastTransitionTime": "2026-11-19T09:49:35Z",
+            "lastUpdateTime": "2026-11-19T09:49:35Z",
+            "message": "Deployment has minimum availability.",
+            "reason": "MinimumReplicasAvailable",
+            "status": "True",
+            "type": "Available"
+          }
+        ],
+        "observedGeneration": 10,
+        "readyReplicas": 1,
+        "replicas": 1,
+        "terminatingReplicas": 0,
+        "updatedReplicas": 1
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "StatefulSet",
+      "metadata": {
+        "annotations": {
+          "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"apps/v1\",\"kind\":\"StatefulSet\",\"metadata\":{\"annotations\":{},\"labels\":{\"accelerator.qcrs.io/runtime\":\"corex-remote\",\"app.kubernetes.io/name\":\"corex-remote-server\"},\"name\":\"corex-remote-server\",\"namespace\":\"accelerator-system\"},\"spec\":{\"podManagementPolicy\":\"OrderedReady\",\"replicas\":1,\"selector\":{\"matchLabels\":{\"app.kubernetes.io/name\":\"corex-remote-server\"}},\"serviceName\":\"corex-remote-server\",\"template\":{\"metadata\":{\"labels\":{\"accelerator.qcrs.io/runtime\":\"corex-remote\",\"app.kubernetes.io/name\":\"corex-remote-server\"}},\"spec\":{\"containers\":[{\"env\":[{\"name\":\"COREX_REMOTE_BIND\",\"value\":\"0.0.0.0\"},{\"name\":\"COREX_REMOTE_PORT\",\"value\":\"50051\"},{\"name\":\"COREX_REMOTE_OBSERVATION_PORT\",\"value\":\"50052\"}],\"image\":\"corex-remote-server:arm64-observed-v4\",\"imagePullPolicy\":\"Never\",\"name\":\"server\",\"ports\":[{\"containerPort\":50051,\"name\":\"remote\",\"protocol\":\"TCP\"},{\"containerPort\":50052,\"name\":\"observation\",\"protocol\":\"TCP\"}],\"securityContext\":{\"privileged\":true},\"volumeMounts\":[{\"mountPath\":\"/dev/iluvatar0\",\"name\":\"iluvatar0\"}]}],\"nodeSelector\":{\"kubernetes.io/arch\":\"arm64\"},\"volumes\":[{\"hostPath\":{\"path\":\"/dev/iluvatar0\",\"type\":\"CharDevice\"},\"name\":\"iluvatar0\"}]}}}}\n"
+        },
+        "creationTimestamp": "2026-11-16T12:38:04Z",
+        "generation": 7,
+        "labels": {
+          "accelerator.qcrs.io/runtime": "corex-remote",
+          "app.kubernetes.io/name": "corex-remote-server"
+        },
+        "name": "corex-remote-server",
+        "namespace": "accelerator-system",
+        "resourceVersion": "267156",
+        "uid": "27b9dac6-ff32-45c5-a605-e7d34bcf1fe9"
+      },
+      "spec": {
+        "persistentVolumeClaimRetentionPolicy": {
+          "whenDeleted": "Retain",
+          "whenScaled": "Retain"
+        },
+        "podManagementPolicy": "OrderedReady",
+        "replicas": 1,
+        "revisionHistoryLimit": 10,
+        "selector": {
+          "matchLabels": {
+            "app.kubernetes.io/name": "corex-remote-server"
+          }
+        },
+        "serviceName": "corex-remote-server",
+        "template": {
+          "metadata": {
+            "labels": {
+              "accelerator.qcrs.io/runtime": "corex-remote",
+              "app.kubernetes.io/name": "corex-remote-server"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "env": [
+                  {
+                    "name": "COREX_REMOTE_BIND",
+                    "value": "0.0.0.0"
+                  },
+                  {
+                    "name": "COREX_REMOTE_PORT",
+                    "value": "50051"
+                  },
+                  {
+                    "name": "COREX_REMOTE_OBSERVATION_PORT",
+                    "value": "50052"
+                  }
+                ],
+                "image": "corex-remote-server:arm64-observed-v4",
+                "imagePullPolicy": "Never",
+                "name": "server",
+                "ports": [
+                  {
+                    "containerPort": 50051,
+                    "name": "remote",
+                    "protocol": "TCP"
+                  },
+                  {
+                    "containerPort": 50052,
+                    "name": "observation",
+                    "protocol": "TCP"
+                  }
+                ],
+                "resources": {},
+                "securityContext": {
+                  "privileged": true
+                },
+                "terminationMessagePath": "/dev/termination-log",
+                "terminationMessagePolicy": "File",
+                "volumeMounts": [
+                  {
+                    "mountPath": "/dev/iluvatar0",
+                    "name": "iluvatar0"
+                  }
+                ]
+              }
+            ],
+            "dnsPolicy": "ClusterFirst",
+            "nodeSelector": {
+              "kubernetes.io/arch": "arm64"
+            },
+            "restartPolicy": "Always",
+            "schedulerName": "default-scheduler",
+            "securityContext": {},
+            "terminationGracePeriodSeconds": 30,
+            "volumes": [
+              {
+                "hostPath": {
+                  "path": "/dev/iluvatar0",
+                  "type": "CharDevice"
+                },
+                "name": "iluvatar0"
+              }
+            ]
+          }
+        },
+        "updateStrategy": {
+          "rollingUpdate": {
+            "maxUnavailable": 1,
+            "partition": 0
+          },
+          "type": "RollingUpdate"
+        }
+      },
+      "status": {
+        "availableReplicas": 1,
+        "collisionCount": 0,
+        "currentReplicas": 1,
+        "currentRevision": "corex-remote-server-5fd9b8b559",
+        "observedGeneration": 7,
+        "readyReplicas": 1,
+        "replicas": 1,
+        "updateRevision": "corex-remote-server-5fd9b8b559",
+        "updatedReplicas": 1
+      }
+    }
+  ]
+}

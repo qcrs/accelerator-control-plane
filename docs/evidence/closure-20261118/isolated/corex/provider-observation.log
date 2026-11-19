@@ -1,0 +1,4 @@
+=== RUN   TestLiveRuntimeObservation
+--- PASS: TestLiveRuntimeObservation (0.01s)
+PASS
+ok  	github.com/qcrs/accelerator-control-plane/internal/provider/observation	0.012s

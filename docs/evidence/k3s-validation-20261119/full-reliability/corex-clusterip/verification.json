@@ -1,0 +1,10 @@
+{
+  "result": "PASS",
+  "driver": "corex",
+  "verifiedAt": "2026-11-19T09:52:18.649283+00:00",
+  "workloadUID": "b066ca3f-7251-430c-b089-30c0127e59b3",
+  "podUID": "39b3a881-10ad-4791-9b92-f16da9e9cedf",
+  "leaseUID": "1e8c72d8-1011-462a-99d6-a4aec33a411d",
+  "runtimeConfigDigestsMatched": true,
+  "localAcceleratorDevices": "NONE"
+}

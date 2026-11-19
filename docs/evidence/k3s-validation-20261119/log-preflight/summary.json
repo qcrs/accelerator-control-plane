@@ -1,0 +1,6 @@
+{
+  "result": "FAIL",
+  "error": "kubectl logs accelerator-manager-cff5f94d7-7llc2 -n accelerator-system -c manager --tail=1: Error from server: Get \"https://192.168.31.244:10250/containerLogs/accelerator-system/accelerator-manager-cff5f94d7-7llc2/manager?tailLines=1\": EOF",
+  "namespace": "accelerator-validation-1119021524",
+  "completed": []
+}

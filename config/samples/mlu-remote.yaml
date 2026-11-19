@@ -7,7 +7,7 @@ spec:
   deviceKinds:
     - NPU
   clientRuntime:
-    image: mlu-remote-client:arm64
+    image: mlu-remote-client:arm64-observed-v1
     runtimeVersion: mlu-remote-runtime-arm64-20261116
     sourcePath: /opt/mlu-remote/lib
     mountPath: /opt/accelerator/mlu
@@ -44,6 +44,8 @@ spec:
     driver: mlu-remote
     version: mlu-remote-runtime-arm64-20261116
     apiVersion: "1"
+  parameters:
+    observationPort: "50052"
   devices:
     - id: mlu-0
       vendor: cambricon
@@ -74,6 +76,6 @@ spec:
       restartPolicy: Never
       containers:
         - name: worker
-          image: mlu-workload:arm64
+          image: mlu-workload:arm64-observed-v1
           imagePullPolicy: Never
-          command: ["/opt/workload/mlu-remote-client-test"]
+          command: ["/opt/workload/mlu-remote-custom-kernel-test"]

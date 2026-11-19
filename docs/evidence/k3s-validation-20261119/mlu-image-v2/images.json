@@ -1,0 +1,14 @@
+{
+  "mlu-remote-server:arm64-observed-v2": {
+    "dockerImageID": "sha256:aad7359bf94b24c51ed28199cb786ceb0291f32bacbead2330be86ff1a2cf52c",
+    "manifestDescriptor": {
+      "digest": "sha256:aad7359bf94b24c51ed28199cb786ceb0291f32bacbead2330be86ff1a2cf52c",
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "size": 1194
+    },
+    "architecture": "arm64",
+    "repoDigests": [
+      "mlu-remote-server@sha256:aad7359bf94b24c51ed28199cb786ceb0291f32bacbead2330be86ff1a2cf52c"
+    ]
+  }
+}

@@ -261,6 +261,7 @@ func TestWorkloadReconcilerFallsBackFromLocalToRemote(t *testing.T) {
 		},
 	}
 	endpoint := &acceleratorv1alpha1.AcceleratorEndpoint{
+		Status:     observedEndpointStatusForTest(1),
 		ObjectMeta: metav1.ObjectMeta{Name: "endpoint-a", Generation: 1},
 		Spec: acceleratorv1alpha1.AcceleratorEndpointSpec{
 			PoolRef: acceleratorv1alpha1.ClusterObjectReference{Name: "remote"}, Address: "gpu-a.example",
@@ -306,7 +307,7 @@ func TestWorkloadReconcilerFallsBackFromLocalToRemote(t *testing.T) {
 	}
 	adapters, err := executionadapter.NewRegistry(
 		executionadapter.NewBinding(localprovider.New(), &allocation.LocalAllocator{Now: func() time.Time { return now }}),
-		executionadapter.NewBinding(cricketprovider.New(), remoteAllocator),
+		executionadapter.NewBinding(newObservedCricketForTest(), remoteAllocator),
 	)
 	if err != nil {
 		t.Fatalf("create execution adapter registry: %v", err)
@@ -452,4 +453,21 @@ func (c *controllerEndpointClaimer) Release(_ context.Context, claim allocation.
 	}
 	delete(c.holders, claim.EndpointName)
 	return nil
+}
+
+func observedEndpointStatusForTest(generation int64) acceleratorv1alpha1.AcceleratorEndpointStatus {
+	sessions := int32(0)
+	now := metav1.Now()
+	return acceleratorv1alpha1.AcceleratorEndpointStatus{Health: acceleratorv1alpha1.DeviceHealthHealthy, Confidence: "Observed", ActiveSessions: &sessions, ObservedAt: &now,
+		Conditions: []metav1.Condition{{Type: "Ready", Status: metav1.ConditionTrue, ObservedGeneration: generation, Reason: "RuntimeObserved", LastTransitionTime: now}}}
+}
+
+type observedCricketForTest struct{ *cricketprovider.Provider }
+
+func newObservedCricketForTest() *observedCricketForTest {
+	return &observedCricketForTest{cricketprovider.New()}
+}
+func (p *observedCricketForTest) Observe(_ context.Context, endpoint contracts.RemoteEndpoint) (contracts.EndpointObservation, error) {
+	sessions := int32(0)
+	return contracts.EndpointObservation{Health: acceleratorv1alpha1.DeviceHealthHealthy, AdvertisedCapacity: int32(len(endpoint.Devices)), ActiveSessions: &sessions, ObservedAt: time.Now(), Confidence: "Observed", Reason: "RuntimeObserved"}, nil
 }

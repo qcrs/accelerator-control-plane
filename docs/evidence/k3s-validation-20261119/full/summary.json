@@ -1,0 +1,17 @@
+{
+  "result": "FAIL",
+  "error": "mlu-auto: expected Succeeded, got Failed",
+  "namespace": "accelerator-validation-1119050357",
+  "completed": [
+    {
+      "scenario": "Auto + numerical + cleanup",
+      "driver": "corex",
+      "result": "PASS"
+    },
+    {
+      "scenario": "exclusive competition",
+      "driver": "corex",
+      "result": "PASS"
+    }
+  ]
+}

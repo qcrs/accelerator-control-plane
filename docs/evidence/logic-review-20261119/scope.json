@@ -1,0 +1,16 @@
+{
+  "productionFilesChanged": [
+    "internal/allocation/remote.go",
+    "internal/adapter/registry.go",
+    "internal/contracts/registry.go",
+    "internal/controller/workload_controller.go"
+  ],
+  "newRegressionFiles": [
+    "internal/adapter/registry_view_test.go",
+    "internal/allocation/remote_transaction_test.go",
+    "internal/controller/reservation_retry_test.go"
+  ],
+  "deployed": false,
+  "gitCommitted": false,
+  "gitPushed": false
+}

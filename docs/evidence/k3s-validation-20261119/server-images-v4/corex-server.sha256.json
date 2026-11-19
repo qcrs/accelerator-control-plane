@@ -1,0 +1,12 @@
+{
+  "bin/server": "bad107a9e0fc5677d682b9ba902c3a3f86c36e61da136fd755519450c0ce19df",
+  "lib/libc.so.6": "00da885fa75663f9c2463eac537c041b71716674cab7d7e8d5ab9b9d1f93b636",
+  "lib/libcuda.so.1": "4f28cafe4583c1a662d5e7bd8ff4cbbe40a150231e938e81be4935800e8a74d6",
+  "lib/libdl.so.2": "fba60fbdc46eca334921024bf26defe0c01c2b0704e12d58e2b908c9dff87e40",
+  "lib/libgcc_s.so.1": "d4bbb45d5d80f4b15d4bf50bfc8ded0a26a44c638859df97be40a6339adb3485",
+  "lib/libixthunk.so": "713c357738ad6636aa58c9e39607b441fe7dd77a232fa543cd636a6ba73c0010",
+  "lib/libm.so.6": "a3f650e70ff4a897ba4b2c1e18ce4bed425561eb4f03c1ef7f3ddc9131d7e879",
+  "lib/libpthread.so.0": "63c2e3d0d288006a9be6781c22e1e810a41b26a29963513dec7cdec10ee16cc8",
+  "lib/librt.so.1": "6d399e1d104f1a4437559dcdbc5e1236c8dd3877e9675f055914629a36270571",
+  "lib/libstdc++.so.6": "03efc8de2eb1f016fa59a937b8858c48ad893558737ef61fe16bbb622283c759"
+}

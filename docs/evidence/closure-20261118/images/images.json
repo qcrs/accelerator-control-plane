@@ -1,0 +1,44 @@
+{
+  "corex-remote-server:arm64-observed-v1": {
+    "configDigest": "sha256:8013aed2d4994f167e9cdbe4d0e052a2e7c4728ebcae0ca463297f9b6c290c1d",
+    "architecture": "arm64",
+    "repoDigests": [
+      "corex-remote-server@sha256:8013aed2d4994f167e9cdbe4d0e052a2e7c4728ebcae0ca463297f9b6c290c1d"
+    ]
+  },
+  "corex-remote-client:arm64-observed-v1": {
+    "configDigest": "sha256:b30358b934ee5ed7729367d425b97f3406cbb905fcc11668063f228cf71f6cd4",
+    "architecture": "arm64",
+    "repoDigests": [
+      "corex-remote-client@sha256:b30358b934ee5ed7729367d425b97f3406cbb905fcc11668063f228cf71f6cd4"
+    ]
+  },
+  "corex-workload:arm64-observed-v1": {
+    "configDigest": "sha256:b6c562e56b1c35deccc08c6a90d29c825173ee698f07689602030a54f8a331bb",
+    "architecture": "arm64",
+    "repoDigests": [
+      "corex-workload@sha256:b6c562e56b1c35deccc08c6a90d29c825173ee698f07689602030a54f8a331bb"
+    ]
+  },
+  "mlu-remote-server:arm64-observed-v1": {
+    "configDigest": "sha256:fd75ead3b850e06dbada4d81a4d1aab9986c3b08ec3e4d63ba20e79a0f768fee",
+    "architecture": "arm64",
+    "repoDigests": [
+      "mlu-remote-server@sha256:fd75ead3b850e06dbada4d81a4d1aab9986c3b08ec3e4d63ba20e79a0f768fee"
+    ]
+  },
+  "mlu-remote-client:arm64-observed-v1": {
+    "configDigest": "sha256:ea0f6bbd08611f2ffdedecd791b3028f400c888d797416ae7fca0436382f382e",
+    "architecture": "arm64",
+    "repoDigests": [
+      "mlu-remote-client@sha256:ea0f6bbd08611f2ffdedecd791b3028f400c888d797416ae7fca0436382f382e"
+    ]
+  },
+  "mlu-workload:arm64-observed-v1": {
+    "configDigest": "sha256:602497bec9ae895b32b4fa09d44722ac3608c8967c10b4bbcb2dd2380535afce",
+    "architecture": "arm64",
+    "repoDigests": [
+      "mlu-workload@sha256:602497bec9ae895b32b4fa09d44722ac3608c8967c10b4bbcb2dd2380535afce"
+    ]
+  }
+}

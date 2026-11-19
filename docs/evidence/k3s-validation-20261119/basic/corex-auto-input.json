@@ -1,0 +1,80 @@
+{
+  "apiVersion": "accelerator.qcrs.io/v1alpha1",
+  "kind": "AcceleratorWorkload",
+  "metadata": {
+    "name": "corex-auto",
+    "namespace": "accelerator-validation-1119020902"
+  },
+  "spec": {
+    "accelerator": {
+      "containerName": "worker",
+      "count": 1,
+      "deviceType": "GPU",
+      "vendor": "iluvatar"
+    },
+    "placement": {
+      "mode": "Auto",
+      "reservationTTL": "5m",
+      "order": [
+        "Local",
+        "Remote"
+      ],
+      "fallback": {
+        "enabled": true,
+        "maxAttempts": 2,
+        "startupTimeout": "2m",
+        "backoff": "2s"
+      }
+    },
+    "podTemplate": {
+      "metadata": {
+        "labels": {
+          "app": "corex-remote-smoke"
+        }
+      },
+      "spec": {
+        "containers": [
+          {
+            "args": [
+              "for device in /dev/nvidia* /dev/iluvatar* /dev/cambricon* /dev/cndrv* /dev/davinci* /dev/ascend*; do\n  if [ -e \"$device\" ]; then echo \"FAIL local accelerator visible: $device\"; exit 80; fi\ndone\necho LOCAL_ACCELERATOR_DEVICES=NONE\n/opt/workload/driver_smoke_app /opt/workload/driver_kernel.cubin\necho KERNEL_FINISHED\nsleep 0\nexit 0\n"
+            ],
+            "command": [
+              "/bin/sh",
+              "-ec"
+            ],
+            "env": [
+              {
+                "name": "COREX_SMOKE_TRACE",
+                "value": "1"
+              }
+            ],
+            "image": "corex-workload:arm64-observed-v1",
+            "imagePullPolicy": "Never",
+            "name": "worker",
+            "securityContext": {
+              "runAsNonRoot": true,
+              "runAsUser": 65532,
+              "allowPrivilegeEscalation": false,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              }
+            },
+            "resources": {
+              "requests": {
+                "cpu": "10m",
+                "memory": "32Mi"
+              },
+              "limits": {
+                "memory": "128Mi"
+              }
+            }
+          }
+        ],
+        "restartPolicy": "Never",
+        "automountServiceAccountToken": false
+      }
+    }
+  }
+}

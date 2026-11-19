@@ -11,6 +11,7 @@ import (
 
 	acceleratorv1alpha1 "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
 	"github.com/qcrs/accelerator-control-plane/internal/contracts"
+	"github.com/qcrs/accelerator-control-plane/internal/provider/observation"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -245,4 +246,12 @@ func remoteAllocationMode(config *acceleratorv1alpha1.RemotePoolConfig) accelera
 		return acceleratorv1alpha1.RemoteAllocationModeExclusiveEndpoint
 	}
 	return config.AllocationMode
+}
+
+func (p *Provider) Observe(ctx context.Context, endpoint contracts.RemoteEndpoint) (contracts.EndpointObservation, error) {
+	host, _, err := endpointConnection(endpoint.Address, endpoint.Parameters)
+	if err != nil {
+		return contracts.EndpointObservation{}, err
+	}
+	return observation.Read(ctx, host, endpoint)
 }

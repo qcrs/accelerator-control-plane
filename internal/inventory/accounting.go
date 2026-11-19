@@ -50,7 +50,7 @@ func ReservedQuantityOnNode(
 	reserved := *resource.NewQuantity(0, resource.DecimalSI)
 	for index := range leases {
 		lease := &leases[index]
-		if !leaseConsumesCapacity(lease) ||
+		if !LeaseConsumesCapacity(lease) ||
 			lease.Spec.Mode != acceleratorv1alpha1.ExecutionModeLocal {
 			continue
 		}
@@ -90,7 +90,7 @@ func OccupiedRemoteCapacity(leases []acceleratorv1alpha1.AcceleratorLease) Remot
 	}
 	for index := range leases {
 		lease := &leases[index]
-		if !leaseConsumesCapacity(lease) || lease.Spec.Mode != acceleratorv1alpha1.ExecutionModeRemote {
+		if !LeaseConsumesCapacity(lease) || lease.Spec.Mode != acceleratorv1alpha1.ExecutionModeRemote {
 			continue
 		}
 		for _, target := range lease.Spec.Targets {
@@ -126,12 +126,21 @@ func podRequestQuantity(pod *corev1.Pod, resourceName corev1.ResourceName) resou
 	}
 
 	largestInit := *resource.NewQuantity(0, resource.DecimalSI)
+	runningSidecars := *resource.NewQuantity(0, resource.DecimalSI)
 	for index := range pod.Spec.InitContainers {
-		requested := containerRequestQuantity(pod.Spec.InitContainers[index], resourceName)
+		container := pod.Spec.InitContainers[index]
+		requested := containerRequestQuantity(container, resourceName)
+		if container.RestartPolicy != nil && *container.RestartPolicy == corev1.ContainerRestartPolicyAlways {
+			runningSidecars.Add(requested)
+			requested = runningSidecars.DeepCopy()
+		} else {
+			requested.Add(runningSidecars)
+		}
 		if requested.Cmp(largestInit) > 0 {
 			largestInit = requested
 		}
 	}
+	applicationSum.Add(runningSidecars)
 	if largestInit.Cmp(applicationSum) > 0 {
 		applicationSum = largestInit
 	}
@@ -156,7 +165,8 @@ func containerRequestQuantity(container corev1.Container, resourceName corev1.Re
 	return *resource.NewQuantity(0, resource.DecimalSI)
 }
 
-func leaseConsumesCapacity(lease *acceleratorv1alpha1.AcceleratorLease) bool {
+// LeaseConsumesCapacity includes pending and releasing ownership until terminal cleanup.
+func LeaseConsumesCapacity(lease *acceleratorv1alpha1.AcceleratorLease) bool {
 	switch lease.Status.Phase {
 	case "",
 		acceleratorv1alpha1.AllocationPhasePending,

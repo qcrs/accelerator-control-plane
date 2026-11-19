@@ -1,0 +1,33 @@
+{
+  "pid": 2903084,
+  "proxyEnvironment": {
+    "HTTPS_PROXY": {
+      "scheme": "http",
+      "host": "127.0.0.1",
+      "port": 54321
+    },
+    "HTTP_PROXY": {
+      "scheme": "http",
+      "host": "127.0.0.1",
+      "port": 54321
+    },
+    "http_proxy": {
+      "scheme": "http",
+      "host": "127.0.0.1",
+      "port": 54321
+    },
+    "https_proxy": {
+      "scheme": "http",
+      "host": "127.0.0.1",
+      "port": 54321
+    }
+  },
+  "networkFlags": [],
+  "recentNetworkErrors": [
+    "E1119 02:10:50.553733 2903084 status.go:71] \"Unhandled Error\" err=\"apiserver received an error that is not an metav1.Status: &url.Error{Op:\\\"Get\\\", URL:\\\"<url>\\\", Err:(*errors.errorString)(0xd567ba0)}: Get \\\"<url>\\\": EOF\" logger=\"UnhandledError\"",
+    "E1119 02:11:34.849679 2903084 status.go:71] \"Unhandled Error\" err=\"apiserver received an error that is not an metav1.Status: &url.Error{Op:\\\"Get\\\", URL:\\\"<url>\\\", Err:(*errors.errorString)(0xd567ba0)}: Get \\\"<url>\\\": EOF\" logger=\"UnhandledError\"",
+    "E1119 02:12:11.496692 2903084 status.go:71] \"Unhandled Error\" err=\"apiserver received an error that is not an metav1.Status: &url.Error{Op:\\\"Get\\\", URL:\\\"<url>\\\", Err:(*errors.errorString)(0xd567ba0)}: Get \\\"<url>\\\": EOF\" logger=\"UnhandledError\"",
+    "E1119 02:15:31.399771 2903084 status.go:71] \"Unhandled Error\" err=\"apiserver received an error that is not an metav1.Status: &url.Error{Op:\\\"Get\\\", URL:\\\"<url>\\\", Err:(*errors.errorString)(0xd567ba0)}: Get \\\"<url>\\\": EOF\" logger=\"UnhandledError\""
+  ],
+  "changesPerformed": false
+}

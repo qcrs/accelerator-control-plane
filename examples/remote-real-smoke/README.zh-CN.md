@@ -1,33 +1,30 @@
-# 本地无卡、远端有卡的真实验证
+# 真实 RemoteOnly smoke
 
-这组脚本把验证边界分开：本地机器不需要 GPU/NPU，也不把本地设备伪装成真实设备；本地只负责编译/构建镜像和提交 Kubernetes 对象。GPU/NPU 访问只发生在远端 server Pod。
-
-## 本地无卡验证
-
-先验证控制面和镜像可以构建：
+使用新版 `arm64-observed-v1` workload/client/server 镜像。CoreX 执行 256 字节 Driver kernel 校验，MLU 执行 1024 元素 BANG vector-add 与 CPU reference 比对；旧内存复制 smoke 不算 kernel 通过。
 
 ```bash
-go test ./...
-docker build -t accelerator-control-plane:dev .
+REMOTE_DRIVER=corex ./examples/remote-real-smoke/run.sh
+REMOTE_DRIVER=mlu ./examples/remote-real-smoke/run.sh
 ```
 
-需要验证 Local 选择、Lease 和 Pod 注入但没有真实卡时，运行合成测试：
+可用 `DEPLOY_SERVER=true` 部署样例服务端；这会修改集群。脚本会删除并重建它自己的 smoke Workload。样例 namespace 固定为 default。
 
-```bash
-./examples/local-synthetic-e2e/run.sh
-```
+每次生成独立 evidence 目录。通过必须同时满足：
 
-它只临时发布一个 `example.com/synthetic-gpu` 扩展资源，不执行 CUDA/MLU，结束时会清理 Node 状态。
+1. Workload Succeeded，引用与 Pod/Lease 匹配；
+2. Pod worker 正常结束且 exit code=0；
+3. 日志含明确的 kernel 数值正确标记；
+4. Lease Released；
+5. Endpoint 最新远端观察可信，activeSessions=0、reserved=0、Ready=True。
 
-## 远端真实 GPU/NPU 验证
+Failed、超时、缺 Pod/Lease、日志 EOF、缺数值标记、清理不确定均返回非零。保存 Workload/Lease/Endpoint/Pod JSON、describe/events、client 日志、server 日志和采集错误。
 
-先把对应的 workload/client/server 镜像构建并加载到集群，然后在控制面节点执行：
+不修改集群的单 ARM 实验、runtime 补丁、构建和镜像验收见 [闭环说明](../../docs/remote-observation-and-validation.zh-CN.md)。
 
-```bash
-REMOTE_DRIVER=corex DEPLOY_SERVER=true ./examples/remote-real-smoke/run.sh
-REMOTE_DRIVER=mlu   DEPLOY_SERVER=true ./examples/remote-real-smoke/run.sh
-```
+原合成 LocalOnly 示例仅测试本地资源注入，不是“本地无卡后选择远端”的证明；本轮无卡证明来自隐藏 `/dev`/SDK 的真实 Remote 客户端和没有设备挂载的 workload 容器。
 
-脚本会等待 `AcceleratorWorkload=Succeeded`，检查 worker 退出码为 0，并保存 Workload、Lease、Pod describe/events、client stdout/stderr 到 `docs/evidence/remote-real-smoke/<driver>/`。数值校验由镜像内真实 GPU/NPU 程序负责；脚本不会把“容器启动”当作计算成功。
+## 新版 K3s 生命周期验收
 
-如果 server 已经部署，省略 `DEPLOY_SERVER=true`。远端 server 清单中的设备挂载和 `privileged` 仅适用于单机实验，生产环境应替换为设备插件和最小权限配置。
+新增 `k3s_suite.py` 使用独立测试命名空间，覆盖 Auto 选择远端、明确数值日志、独占竞争、停服排队、Ready 后故障不重放、删除回收、Controller 重启和 CoreX DNS/Pod IP 变化。准备及执行步骤、当前实际结果见 [K3s 验收记录](../../docs/k3s-validation-report.zh-CN.md)。
+
+脚本在创建任务前校验日志通道、镜像 config digest 和空闲状态；没有完整证据时返回 FAIL。`--disruptions` 会操作测试服务和控制器，并拒绝其他命名空间的活动任务或 Claim。上面的单项样例入口仍可使用。

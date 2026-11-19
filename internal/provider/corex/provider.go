@@ -11,6 +11,7 @@ import (
 
 	acceleratorv1alpha1 "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
 	"github.com/qcrs/accelerator-control-plane/internal/contracts"
+	"github.com/qcrs/accelerator-control-plane/internal/provider/observation"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -117,22 +118,6 @@ func (p *Provider) BuildRuntimePlan(
 	if err != nil {
 		return contracts.RuntimePlan{}, err
 	}
-	// CoreX CRX9 sessions are sensitive to the Kubernetes service path. Keep
-	// the stable StatefulSet DNS name in the Endpoint, but inject a resolved
-	// Pod IP into the client so the session bypasses ClusterIP/NAT and remains
-	// a direct TCP connection.
-	if strings.HasSuffix(host, ".svc.cluster.local") {
-		resolved, lookupErr := net.LookupHost(host)
-		if lookupErr != nil || len(resolved) == 0 {
-			return contracts.RuntimePlan{}, contracts.NewError(contracts.ErrorKindTransient, "resolve CoreX endpoint", fmt.Sprintf("resolve %q: %v", host, lookupErr))
-		}
-		for _, candidate := range resolved {
-			if parsed := net.ParseIP(candidate); parsed != nil && parsed.To4() != nil {
-				host = parsed.String()
-				break
-			}
-		}
-	}
 	sourcePath, mountPath, err := runtimePaths(provider.Spec.ClientRuntime)
 	if err != nil {
 		return contracts.RuntimePlan{}, err
@@ -230,4 +215,12 @@ func remoteAllocationMode(config *acceleratorv1alpha1.RemotePoolConfig) accelera
 		return acceleratorv1alpha1.RemoteAllocationModeExclusiveEndpoint
 	}
 	return config.AllocationMode
+}
+
+func (p *Provider) Observe(ctx context.Context, endpoint contracts.RemoteEndpoint) (contracts.EndpointObservation, error) {
+	host, _, err := endpointConnection(endpoint.Address, endpoint.Parameters)
+	if err != nil {
+		return contracts.EndpointObservation{}, err
+	}
+	return observation.Read(ctx, host, endpoint)
 }

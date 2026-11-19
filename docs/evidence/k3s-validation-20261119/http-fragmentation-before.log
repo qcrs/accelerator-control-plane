@@ -1,0 +1,16 @@
+test_full_request_remains_compatible (test_observation_http_native.ObservationHttpNativeTest) ... ok
+test_split_request_headers_are_consumed_before_reply_and_close (test_observation_http_native.ObservationHttpNativeTest) ... FAIL
+test_unsupported_method_does_not_return_healthy (test_observation_http_native.ObservationHttpNativeTest) ... ok
+
+======================================================================
+FAIL: test_split_request_headers_are_consumed_before_reply_and_close (test_observation_http_native.ObservationHttpNativeTest)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/lvtong/vGPU/vGPU/accelerator-control-plane/examples/remote-real-smoke/test_observation_http_native.py", line 57, in test_split_request_headers_are_consumed_before_reply_and_close
+    with self.assertRaises(socket.timeout):
+AssertionError: TimeoutError not raised
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.129s
+
+FAILED (failures=1)

@@ -3,6 +3,7 @@ package allocation
 import (
 	"context"
 	"fmt"
+	"time"
 
 	acceleratorv1alpha1 "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
 	"github.com/qcrs/accelerator-control-plane/internal/contracts"
@@ -75,6 +76,10 @@ func (r *KubernetesEndpointResolver) Resolve(ctx context.Context, endpointName s
 			resolved.Readiness.Reason = "StaleCondition"
 			resolved.Readiness.Message = fmt.Sprintf("Ready condition is stale for generation %d", endpoint.Generation)
 		}
+	}
+
+	if ready, reason := contracts.EndpointObservedReady(endpoint, time.Now()); !ready && (resolved.Readiness == nil || resolved.Readiness.Ready) {
+		resolved.Readiness = &contracts.EndpointReadiness{Ready: false, Reason: "ObservationNotReady", Message: reason}
 	}
 	return resolved, nil
 }

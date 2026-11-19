@@ -1,0 +1,12 @@
+[
+  {
+    "scenario": "Auto + numerical + cleanup",
+    "driver": "corex",
+    "result": "PASS"
+  },
+  {
+    "scenario": "exclusive competition",
+    "driver": "corex",
+    "result": "PASS"
+  }
+]

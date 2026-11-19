@@ -1,0 +1,22 @@
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  32.81kB
+Step 1/5 : FROM ubuntu:22.04
+ ---> a4b6ef03a473
+Step 2/5 : COPY bin/ /opt/workload/
+ ---> Using cache
+ ---> 135a861ba693
+Step 3/5 : WORKDIR /opt/workload
+ ---> Using cache
+ ---> b91cd5e48f5f
+Step 4/5 : USER 65532:65532
+ ---> Using cache
+ ---> fd4c80ab214f
+Step 5/5 : CMD ["/bin/sh"]
+ ---> Using cache
+ ---> b6c562e56b1c
+[Warning] One or more build-args [DRIVER] were not consumed
+Successfully built b6c562e56b1c
+Successfully tagged corex-workload:arm64-observed-v1

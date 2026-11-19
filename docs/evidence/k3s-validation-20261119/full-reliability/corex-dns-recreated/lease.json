@@ -1,0 +1,112 @@
+{
+  "apiVersion": "accelerator.qcrs.io/v1alpha1",
+  "kind": "AcceleratorLease",
+  "metadata": {
+    "annotations": {
+      "accelerator.qcrs.io/decision-policy": "local-first-fit/v1",
+      "accelerator.qcrs.io/decision-reason": "selected 1 remote device(s) from endpoint corex-remote-server in pool corex-remote",
+      "accelerator.qcrs.io/workload-name": "corex-dns-recreated"
+    },
+    "creationTimestamp": "2026-11-19T09:52:04Z",
+    "generation": 1,
+    "labels": {
+      "accelerator.qcrs.io/workload": "corex-dns-recreated",
+      "accelerator.qcrs.io/workload-uid": "a2129a1d-9368-4916-a8f6-6c4ab7afac01"
+    },
+    "name": "corex-dns-recreated-a2129a1d-lease-1",
+    "namespace": "accelerator-validation-1119094357",
+    "ownerReferences": [
+      {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "blockOwnerDeletion": true,
+        "controller": true,
+        "kind": "AcceleratorWorkload",
+        "name": "corex-dns-recreated",
+        "uid": "a2129a1d-9368-4916-a8f6-6c4ab7afac01"
+      }
+    ],
+    "resourceVersion": "267224",
+    "uid": "649e6b7e-94f1-4cec-b099-30e9e66cb16a"
+  },
+  "spec": {
+    "driver": "corex-remote",
+    "mode": "Remote",
+    "owner": {
+      "apiVersion": "accelerator.qcrs.io/v1alpha1",
+      "kind": "AcceleratorWorkload",
+      "name": "corex-dns-recreated",
+      "namespace": "accelerator-validation-1119094357",
+      "uid": "a2129a1d-9368-4916-a8f6-6c4ab7afac01"
+    },
+    "poolRef": {
+      "name": "corex-remote"
+    },
+    "providerRef": {
+      "name": "corex-remote"
+    },
+    "request": {
+      "containerName": "worker",
+      "count": 1,
+      "deviceType": "GPU",
+      "memory": "0",
+      "vendor": "iluvatar"
+    },
+    "targets": [
+      {
+        "deviceIDs": [
+          "gpu-0"
+        ],
+        "endpointName": "corex-remote-server",
+        "exclusive": true
+      }
+    ],
+    "ttl": "5m0s",
+    "workloadGeneration": 2
+  },
+  "status": {
+    "binding": {
+      "endpoints": [
+        {
+          "address": "corex-remote-server-0.corex-remote-server.accelerator-system.svc.cluster.local:50051",
+          "name": "corex-remote-server",
+          "parameters": {
+            "observationPort": "50052"
+          },
+          "runtime": {
+            "apiVersion": "3",
+            "driver": "corex-remote",
+            "version": "corex-remote-arm64-4.4"
+          }
+        }
+      ],
+      "id": "remote/649e6b7e-94f1-4cec-b099-30e9e66cb16a"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-19T09:52:07Z",
+        "message": "accelerator capacity was released",
+        "observedGeneration": 1,
+        "reason": "Released",
+        "status": "False",
+        "type": "Reserved"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T09:52:04Z",
+        "message": "runtime configuration was injected and the workload Pod was created",
+        "observedGeneration": 1,
+        "reason": "Materialized",
+        "status": "True",
+        "type": "RuntimeReady"
+      }
+    ],
+    "observedGeneration": 1,
+    "phase": "Released",
+    "podRef": {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "name": "corex-dns-recreated-a2129a1d",
+      "namespace": "accelerator-validation-1119094357",
+      "uid": "85e18123-6877-4511-ba3a-80bb8a881e43"
+    }
+  }
+}

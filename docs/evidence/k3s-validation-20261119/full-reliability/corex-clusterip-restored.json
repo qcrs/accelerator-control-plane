@@ -1,0 +1,82 @@
+{
+  "apiVersion": "accelerator.qcrs.io/v1alpha1",
+  "kind": "AcceleratorEndpoint",
+  "metadata": {
+    "annotations": {
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"accelerator.qcrs.io/v1alpha1\",\"kind\":\"AcceleratorEndpoint\",\"metadata\":{\"annotations\":{},\"labels\":{\"accelerator.qcrs.io/runtime\":\"corex-remote\"},\"name\":\"corex-remote-server\"},\"spec\":{\"address\":\"corex-remote-server-0.corex-remote-server.accelerator-system.svc.cluster.local:50051\",\"devices\":[{\"health\":\"Healthy\",\"id\":\"gpu-0\",\"memory\":\"16Gi\",\"model\":\"MR-V100\",\"resourceForm\":\"WholeDevice\",\"vendor\":\"iluvatar\"}],\"parameters\":{\"observationPort\":\"50052\"},\"poolRef\":{\"name\":\"corex-remote\"},\"runtime\":{\"apiVersion\":\"3\",\"driver\":\"corex-remote\",\"version\":\"corex-remote-arm64-4.4\"}}}\n"
+    },
+    "creationTimestamp": "2026-11-16T08:31:40Z",
+    "generation": 10,
+    "labels": {
+      "accelerator.qcrs.io/runtime": "corex-remote"
+    },
+    "name": "corex-remote-server",
+    "resourceVersion": "267300",
+    "uid": "a9f1294d-7563-4b31-9de0-534a9594d1d5"
+  },
+  "spec": {
+    "address": "corex-remote-server-0.corex-remote-server.accelerator-system.svc.cluster.local:50051",
+    "devices": [
+      {
+        "health": "Healthy",
+        "id": "gpu-0",
+        "memory": "16Gi",
+        "model": "MR-V100",
+        "resourceForm": "WholeDevice",
+        "vendor": "iluvatar"
+      }
+    ],
+    "parameters": {
+      "observationPort": "50052"
+    },
+    "poolRef": {
+      "name": "corex-remote"
+    },
+    "runtime": {
+      "apiVersion": "3",
+      "driver": "corex-remote",
+      "version": "corex-remote-arm64-4.4"
+    }
+  },
+  "status": {
+    "activeSessions": 0,
+    "available": 1,
+    "capacity": {
+      "available": 1,
+      "total": 1
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-16T08:31:40Z",
+        "message": "endpoint exposes 1 statically validated device(s)",
+        "observedGeneration": 10,
+        "reason": "ConfigurationValid",
+        "status": "True",
+        "type": "Configured"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T09:52:12Z",
+        "message": "runtime responded with device enumeration and live session/cleanup accounting; this is not a kernel correctness test",
+        "observedGeneration": 10,
+        "reason": "RuntimeObserved",
+        "status": "True",
+        "type": "Ready"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T09:52:16Z",
+        "message": "runtime sessions and the ledger are observationally compatible; aggregate counts cannot prove session ownership",
+        "observedGeneration": 10,
+        "reason": "SessionsAccounted",
+        "status": "True",
+        "type": "SessionsConsistent"
+      }
+    ],
+    "confidence": "Observed",
+    "health": "Healthy",
+    "message": "runtime responded with device enumeration and live session/cleanup accounting; this is not a kernel correctness test",
+    "observationSource": "remote-probe",
+    "observedAt": "2026-11-19T09:52:18Z",
+    "observedGeneration": 10,
+    "reason": "RuntimeObserved"
+  }
+}

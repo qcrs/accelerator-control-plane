@@ -1,0 +1,6 @@
+{
+  "runtimePatchMatchesSource": true,
+  "serverImageMatchesBuiltBinary": true,
+  "deploymentPerformed": false,
+  "gitPushPerformed": false
+}

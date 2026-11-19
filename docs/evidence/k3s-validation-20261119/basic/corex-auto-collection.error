@@ -1,0 +1,1 @@
+kubectl logs corex-auto-95e14f46 -n accelerator-validation-1119020902 -c worker: Error from server: Get "https://192.168.31.244:10250/containerLogs/accelerator-validation-1119020902/corex-auto-95e14f46/worker": EOF

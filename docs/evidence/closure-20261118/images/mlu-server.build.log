@@ -1,0 +1,40 @@
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  6.471MB
+Step 1/11 : FROM ubuntu:22.04
+ ---> a4b6ef03a473
+Step 2/11 : COPY bin/ /opt/runtime/bin/
+ ---> Using cache
+ ---> 671b6c087e39
+Step 3/11 : COPY lib/ /opt/runtime/lib/
+ ---> Using cache
+ ---> fb84165e17fa
+Step 4/11 : COPY modules/ /opt/runtime/modules/
+ ---> Using cache
+ ---> 9ef9b7a13d23
+Step 5/11 : ENV LD_LIBRARY_PATH=/opt/runtime/lib
+ ---> Using cache
+ ---> c744bb321ee4
+Step 6/11 : ENV MLU_REMOTE_MODULE_DIR=/opt/runtime/modules
+ ---> Using cache
+ ---> 0985f958e9e2
+Step 7/11 : ENV COREX_REMOTE_BIND=0.0.0.0 MLU_REMOTE_BIND=0.0.0.0
+ ---> Using cache
+ ---> 41209449e49b
+Step 8/11 : ENV COREX_REMOTE_PORT=50051 MLU_REMOTE_PORT=50051
+ ---> Using cache
+ ---> 16f61c587a15
+Step 9/11 : ENV COREX_REMOTE_OBSERVATION_PORT=50052 MLU_REMOTE_OBSERVATION_PORT=50052
+ ---> Using cache
+ ---> 3ef51864857b
+Step 10/11 : EXPOSE 50051 50052
+ ---> Using cache
+ ---> eb88e3c61010
+Step 11/11 : ENTRYPOINT ["/opt/runtime/bin/server"]
+ ---> Using cache
+ ---> fd75ead3b850
+[Warning] One or more build-args [DRIVER] were not consumed
+Successfully built fd75ead3b850
+Successfully tagged mlu-remote-server:arm64-observed-v1

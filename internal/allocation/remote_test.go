@@ -3,6 +3,7 @@ package allocation
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -52,6 +53,7 @@ func TestRemoteAllocatorSnapshotsResolvedEndpoint(t *testing.T) {
 	now := time.Unix(100, 0)
 	allocator := &RemoteAllocator{
 		Resolver: fakeResolver{"a": {
+			Readiness:  &contracts.EndpointReadiness{Ready: true},
 			Name:       "a",
 			PoolName:   "remote",
 			Address:    "gpu-a.example:43123",
@@ -159,7 +161,8 @@ func TestRemoteAllocatorRequiresExclusiveSelectionToCoverEveryVisibleDevice(t *t
 	claimer := &fakeEndpointClaimer{}
 	allocator := &RemoteAllocator{
 		Resolver: fakeResolver{"a": {
-			Name: "a", PoolName: "remote", Address: "gpu-a",
+			Readiness: &contracts.EndpointReadiness{Ready: true},
+			Name:      "a", PoolName: "remote", Address: "gpu-a",
 			Runtime: acceleratorv1alpha1.RuntimeInfo{Driver: "cricket"},
 			Devices: []acceleratorv1alpha1.DeviceInfo{
 				{ID: "gpu-0", Health: acceleratorv1alpha1.DeviceHealthHealthy},
@@ -200,5 +203,69 @@ func TestRemoteAllocatorUsesEndpointClaimAsFinalConflictCheck(t *testing.T) {
 	})
 	if !contracts.IsErrorKind(err, contracts.ErrorKindConflict) {
 		t.Fatalf("expected atomic claim conflict, got %v", err)
+	}
+}
+
+func TestRemoteAllocatorRejectsAggregationBeforeClaiming(t *testing.T) {
+	allocator := &RemoteAllocator{Resolver: fakeResolver{}, Validator: fakeEndpointValidator(func(contracts.RemoteEndpoint) error { return nil }), Claimer: &fakeEndpointClaimer{}}
+	_, err := allocator.Reserve(context.Background(), contracts.ReservationRequest{Mode: acceleratorv1alpha1.ExecutionModeRemote, LeaseKey: "aggregate", TTL: time.Minute, Targets: []acceleratorv1alpha1.AllocationTarget{{EndpointName: "a", Exclusive: true}, {EndpointName: "b", Exclusive: true}}})
+	if !contracts.IsErrorKind(err, contracts.ErrorKindInvalid) {
+		t.Fatalf("aggregation accepted: %v", err)
+	}
+}
+
+func TestRemoteAllocatorRejectsUnknownAndRollsBackClaim(t *testing.T) {
+	claimer := &fakeEndpointClaimer{}
+	allocator := &RemoteAllocator{Resolver: fakeResolver{"a": {Name: "a", PoolName: "remote", Address: "a", Runtime: acceleratorv1alpha1.RuntimeInfo{Driver: "test"}, Devices: []acceleratorv1alpha1.DeviceInfo{{ID: "0", Health: acceleratorv1alpha1.DeviceHealthHealthy}}}}, Validator: fakeEndpointValidator(func(contracts.RemoteEndpoint) error { return nil }), Claimer: claimer}
+	_, err := allocator.Reserve(context.Background(), contracts.ReservationRequest{Mode: acceleratorv1alpha1.ExecutionModeRemote, LeaseKey: "unknown", PoolName: "remote", TTL: time.Minute, Targets: []acceleratorv1alpha1.AllocationTarget{{EndpointName: "a", Exclusive: true, DeviceIDs: []string{"0"}}}})
+	if !contracts.IsErrorKind(err, contracts.ErrorKindConflict) || claimer.holders["a"] != "" {
+		t.Fatalf("unknown readiness leaked reservation: %v %+v", err, claimer.holders)
+	}
+}
+
+func (validate fakeEndpointValidator) Observe(_ context.Context, endpoint contracts.RemoteEndpoint) (contracts.EndpointObservation, error) {
+	sessions := int32(0)
+	return contracts.EndpointObservation{Health: acceleratorv1alpha1.DeviceHealthHealthy, AdvertisedCapacity: int32(len(endpoint.Devices)), ActiveSessions: &sessions, ObservedAt: time.Now(), Confidence: "Observed"}, nil
+}
+
+type liveObservationValidator struct {
+	fakeEndpointValidator
+	observation contracts.EndpointObservation
+	err         error
+}
+
+func (v liveObservationValidator) Observe(context.Context, contracts.RemoteEndpoint) (contracts.EndpointObservation, error) {
+	return v.observation, v.err
+}
+
+func TestPostClaimProbeRejectsBusyUnhealthyAndUnknownRuntime(t *testing.T) {
+	for _, state := range []string{"busy", "unhealthy", "unknown", "stale", "error"} {
+		t.Run(state, func(t *testing.T) {
+			sessions := int32(0)
+			observation := contracts.EndpointObservation{Health: acceleratorv1alpha1.DeviceHealthHealthy, AdvertisedCapacity: 1, ActiveSessions: &sessions, Confidence: "Observed", ObservedAt: time.Now()}
+			var probeErr error
+			switch state {
+			case "busy":
+				sessions = 1
+			case "unhealthy":
+				observation.Health = acceleratorv1alpha1.DeviceHealthUnhealthy
+			case "unknown":
+				observation.ActiveSessions = nil
+			case "stale":
+				observation.ObservedAt = time.Now().Add(-2 * time.Minute)
+			case "error":
+				probeErr = fmt.Errorf("probe timeout")
+			}
+			claimer := &fakeEndpointClaimer{}
+			allocator := &RemoteAllocator{Resolver: fakeResolver{"a": {Name: "a", PoolName: "remote", Address: "a", Runtime: acceleratorv1alpha1.RuntimeInfo{Driver: "test"}, Readiness: &contracts.EndpointReadiness{Ready: true}, Devices: []acceleratorv1alpha1.DeviceInfo{{ID: "0", Health: acceleratorv1alpha1.DeviceHealthHealthy}}}}, Validator: liveObservationValidator{fakeEndpointValidator: func(contracts.RemoteEndpoint) error { return nil }, observation: observation, err: probeErr}, Claimer: claimer}
+			_, err := allocator.Reserve(context.Background(), contracts.ReservationRequest{Mode: acceleratorv1alpha1.ExecutionModeRemote, PoolName: "remote", LeaseKey: "fresh", TTL: time.Minute, Targets: []acceleratorv1alpha1.AllocationTarget{{EndpointName: "a", Exclusive: true, DeviceIDs: []string{"0"}}}})
+			expectedKind := contracts.ErrorKindConflict
+			if probeErr != nil {
+				expectedKind = contracts.ErrorKindTransient
+			}
+			if !contracts.IsErrorKind(err, expectedKind) || claimer.holders["a"] != "" {
+				t.Fatalf("stale-status window admitted %s: error=%v claims=%+v", state, err, claimer.holders)
+			}
+		})
 	}
 }

@@ -1,0 +1,74 @@
+{
+  "result": "PASS",
+  "namespace": "accelerator-validation-1119094357",
+  "disruptionsExecuted": true,
+  "scenarios": [
+    {
+      "scenario": "Auto + numerical + cleanup",
+      "driver": "corex",
+      "result": "PASS"
+    },
+    {
+      "scenario": "exclusive competition",
+      "driver": "corex",
+      "result": "PASS"
+    },
+    {
+      "scenario": "Auto + numerical + cleanup",
+      "driver": "mlu",
+      "result": "PASS"
+    },
+    {
+      "scenario": "exclusive competition",
+      "driver": "mlu",
+      "result": "PASS"
+    },
+    {
+      "scenario": "outage queues new task and recovery resumes it",
+      "driver": "corex",
+      "result": "PASS"
+    },
+    {
+      "scenario": "post-Ready server outage does not replay",
+      "driver": "corex",
+      "result": "PASS"
+    },
+    {
+      "scenario": "delete running task releases ownership",
+      "driver": "corex",
+      "result": "PASS"
+    },
+    {
+      "scenario": "outage queues new task and recovery resumes it",
+      "driver": "mlu",
+      "result": "PASS"
+    },
+    {
+      "scenario": "post-Ready server outage does not replay",
+      "driver": "mlu",
+      "result": "PASS"
+    },
+    {
+      "scenario": "delete running task releases ownership",
+      "driver": "mlu",
+      "result": "PASS"
+    },
+    {
+      "scenario": "controller restart retains allocation and Pod",
+      "driver": "corex",
+      "result": "PASS"
+    },
+    {
+      "scenario": "stable DNS survives server Pod IP change",
+      "driver": "corex",
+      "result": "PASS"
+    },
+    {
+      "scenario": "ClusterIP DNS and Service NAT execute numerical kernel",
+      "driver": "corex",
+      "result": "PASS"
+    }
+  ],
+  "startedAt": "2026-11-19T09:43:57.968170+00:00",
+  "finishedAt": "2026-11-19T09:52:19.418216+00:00"
+}

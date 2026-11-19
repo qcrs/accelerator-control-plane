@@ -1,0 +1,595 @@
+--- a/internal/allocation/remote.go
++++ b/internal/allocation/remote.go
+@@ -4,7 +4,6 @@
+ 	"context"
+ 	"errors"
+ 	"fmt"
+-	"sort"
+ 	"time"
+ 
+ 	acceleratorv1alpha1 "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
+@@ -13,8 +12,9 @@
+ )
+ 
+ // RemoteAllocator materializes immutable endpoint snapshots for a reservation.
+-// Capacity ownership stays in AcceleratorLease objects; no provider-specific
+-// daemon is called here; the resolver must supply a current trusted observation.
++// The atomic Claim protects ownership; AcceleratorLease stores its lifecycle.
++// The resolver and provider observation verify the target before materialization;
++// vendor wire protocols remain inside the Provider.
+ type RemoteAllocator struct {
+ 	Resolver  contracts.EndpointResolver
+ 	Validator contracts.RemoteEndpointValidator
+@@ -58,118 +58,98 @@
+ 		return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", "exactly one exclusive endpoint target is supported")
+ 	}
+ 
+-	seenEndpoints := make(map[string]struct{}, len(request.Targets))
+-	endpointNames := make([]string, 0, len(request.Targets))
+-	for _, target := range request.Targets {
+-		if target.EndpointName == "" {
+-			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", "each target requires an endpoint name")
+-		}
+-		if !target.Exclusive {
+-			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindUnsupported, "reserve remote accelerator", "the static remote allocator supports whole-endpoint exclusive targets only")
+-		}
+-		if _, exists := seenEndpoints[target.EndpointName]; exists {
+-			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", fmt.Sprintf("endpoint %q is duplicated", target.EndpointName))
+-		}
+-		seenEndpoints[target.EndpointName] = struct{}{}
+-		endpointNames = append(endpointNames, target.EndpointName)
+-	}
+-	sort.Strings(endpointNames)
+-	claimed := make([]EndpointClaim, 0, len(endpointNames))
+-	for _, endpointName := range endpointNames {
+-		claim := endpointClaim(request, endpointName)
+-		if err := a.Claimer.Claim(ctx, claim); err != nil {
+-			return contracts.Reservation{}, errors.Join(err, a.releaseClaims(ctx, claimed))
+-		}
+-		claimed = append(claimed, claim)
++	target := request.Targets[0]
++	if target.EndpointName == "" || len(target.DeviceIDs) == 0 {
++		return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", "one endpoint name and device IDs are required")
++	}
++	if !target.Exclusive {
++		return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindUnsupported, "reserve remote accelerator", "the remote allocator supports whole-endpoint exclusive targets only")
++	}
++	claim := endpointClaim(request, target.EndpointName)
++	if err := a.Claimer.Claim(ctx, claim); err != nil {
++		return contracts.Reservation{}, err
+ 	}
+ 	rollback := true
+ 	defer func() {
+ 		if rollback {
+-			returnErr = errors.Join(returnErr, a.releaseClaims(ctx, claimed))
++			if releaseErr := a.Claimer.Release(ctx, claim); releaseErr != nil {
++				// A failed rollback means ownership may remain. It must dominate
++				// the original conflict/validation error so the controller retains
++				// the pending Lease and its cleanup finalizer.
++				returnErr = contracts.WrapError(contracts.ErrorKindTransient, "rollback remote reservation", "endpoint claim release is unconfirmed", errors.Join(returnErr, releaseErr))
++			}
+ 		}
+ 	}()
+ 
+-	bindings := make([]acceleratorv1alpha1.BoundEndpoint, 0, len(request.Targets))
+-	for _, target := range request.Targets {
+-		if target.EndpointName == "" || len(target.DeviceIDs) == 0 {
+-			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", "each target requires an endpoint name and device IDs")
+-		}
+-
+-		endpoint, err := a.Resolver.Resolve(ctx, target.EndpointName)
+-		if err != nil {
+-			if contracts.IsErrorKind(err, contracts.ErrorKindConflict) ||
+-				contracts.IsErrorKind(err, contracts.ErrorKindUnschedulable) ||
+-				contracts.IsErrorKind(err, contracts.ErrorKindInvalid) ||
+-				contracts.IsErrorKind(err, contracts.ErrorKindUnsupported) {
+-				return contracts.Reservation{}, err
+-			}
+-			return contracts.Reservation{}, contracts.WrapError(contracts.ErrorKindTransient, "reserve remote accelerator", "resolve endpoint", err)
+-		}
+-		if endpoint.Unschedulable {
+-			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindConflict, "reserve remote accelerator", fmt.Sprintf("endpoint %q became unschedulable", target.EndpointName))
+-		}
+-		if endpoint.Readiness == nil {
+-			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindConflict, "reserve remote accelerator", "remote observation is missing; endpoint availability is unknown")
+-		}
+-		if !endpoint.Readiness.Ready {
+-			message := endpoint.Readiness.Message
+-			if message == "" {
+-				message = endpoint.Readiness.Reason
+-			}
+-			if message == "" {
+-				message = "Ready condition is not true"
+-			}
+-			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindConflict, "reserve remote accelerator", fmt.Sprintf("endpoint %q is explicitly not ready: %s", target.EndpointName, message))
+-		}
+-		if endpoint.Name != target.EndpointName || endpoint.PoolName != request.PoolName {
+-			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindConflict, "reserve remote accelerator", fmt.Sprintf("endpoint %q no longer resolves inside pool %q", target.EndpointName, request.PoolName))
+-		}
+-		if endpoint.Address == "" {
+-			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", fmt.Sprintf("endpoint %q has no runtime address", target.EndpointName))
+-		}
+-		if endpoint.Runtime.Driver == "" {
+-			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", fmt.Sprintf("endpoint %q has no runtime driver", target.EndpointName))
+-		}
+-		if err := a.Validator.ValidateEndpoint(endpoint); err != nil {
++	endpoint, err := a.Resolver.Resolve(ctx, target.EndpointName)
++	if err != nil {
++		if contracts.IsErrorKind(err, contracts.ErrorKindConflict) ||
++			contracts.IsErrorKind(err, contracts.ErrorKindUnschedulable) ||
++			contracts.IsErrorKind(err, contracts.ErrorKindInvalid) ||
++			contracts.IsErrorKind(err, contracts.ErrorKindUnsupported) {
+ 			return contracts.Reservation{}, err
+ 		}
+-		observer, ok := a.Validator.(contracts.EndpointObserver)
+-		if !ok {
+-			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindConflict, "reserve remote accelerator", "post-claim session observation is unavailable")
+-		}
+-		probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+-		observation, observeErr := observer.Observe(probeCtx, endpoint)
+-		cancel()
+-		now := time.Now()
+-		if observeErr != nil || observation.Health != acceleratorv1alpha1.DeviceHealthHealthy || observation.Confidence != "Observed" || observation.ActiveSessions == nil || *observation.ActiveSessions != 0 || observation.AdvertisedCapacity != int32(len(endpoint.Devices)) || observation.ObservedAt.IsZero() || now.Before(observation.ObservedAt) || now.Sub(observation.ObservedAt) > contracts.ObservationMaxAge {
+-			sessions := "Unknown"
+-			if observation.ActiveSessions != nil {
+-				sessions = fmt.Sprint(*observation.ActiveSessions)
+-			}
+-			message := fmt.Sprintf("post-claim runtime check rejected allocation: health=%s, confidence=%s, active sessions=%s, capacity=%d (expected %d); observation must be current and session-free", observation.Health, observation.Confidence, sessions, observation.AdvertisedCapacity, len(endpoint.Devices))
+-			if observeErr != nil {
+-				message = "post-claim runtime observation failed: " + observeErr.Error()
+-			}
+-			return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindConflict, "reserve remote accelerator", message)
+-		}
+-
+-		if err := validateSelectedDevices(target, endpoint.Devices); err != nil {
+-			return contracts.Reservation{}, err
+-		}
+-		if len(target.DeviceIDs) != healthyDeviceCount(endpoint.Devices) {
+-			return contracts.Reservation{}, contracts.NewError(
+-				contracts.ErrorKindConflict,
+-				"reserve remote accelerator",
+-				fmt.Sprintf("exclusive endpoint %q exposes %d healthy devices but the workload selected %d; static runtimes cannot hide unselected devices", target.EndpointName, healthyDeviceCount(endpoint.Devices), len(target.DeviceIDs)),
+-			)
+-		}
+-		bindings = append(bindings, acceleratorv1alpha1.BoundEndpoint{
+-			Name:       endpoint.Name,
+-			Address:    endpoint.Address,
+-			Runtime:    endpoint.Runtime,
+-			Parameters: copyParameters(endpoint.Parameters),
+-		})
+-	}
++		return contracts.Reservation{}, contracts.WrapError(contracts.ErrorKindTransient, "reserve remote accelerator", "resolve endpoint", err)
++	}
++	if endpoint.Unschedulable {
++		return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindConflict, "reserve remote accelerator", fmt.Sprintf("endpoint %q became unschedulable", target.EndpointName))
++	}
++	if endpoint.Readiness == nil {
++		return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindConflict, "reserve remote accelerator", "remote observation is missing; endpoint availability is unknown")
++	}
++	if !endpoint.Readiness.Ready {
++		message := endpoint.Readiness.Message
++		if message == "" {
++			message = endpoint.Readiness.Reason
++		}
++		if message == "" {
++			message = "Ready condition is not true"
++		}
++		return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindConflict, "reserve remote accelerator", fmt.Sprintf("endpoint %q is explicitly not ready: %s", target.EndpointName, message))
++	}
++	if endpoint.Name != target.EndpointName || endpoint.PoolName != request.PoolName {
++		return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindConflict, "reserve remote accelerator", fmt.Sprintf("endpoint %q no longer resolves inside pool %q", target.EndpointName, request.PoolName))
++	}
++	if endpoint.Address == "" {
++		return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", fmt.Sprintf("endpoint %q has no runtime address", target.EndpointName))
++	}
++	if endpoint.Runtime.Driver == "" {
++		return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindInvalid, "reserve remote accelerator", fmt.Sprintf("endpoint %q has no runtime driver", target.EndpointName))
++	}
++	if err := a.Validator.ValidateEndpoint(endpoint); err != nil {
++		return contracts.Reservation{}, err
++	}
++	observer, ok := a.Validator.(contracts.EndpointObserver)
++	if !ok {
++		return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindConflict, "reserve remote accelerator", "post-claim session observation is unavailable")
++	}
++	probeCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
++	observation, observeErr := observer.Observe(probeCtx, endpoint)
++	cancel()
++	observedNow := time.Now()
++	if observeErr != nil || observation.Health != acceleratorv1alpha1.DeviceHealthHealthy || observation.Confidence != "Observed" || observation.ActiveSessions == nil || *observation.ActiveSessions != 0 || observation.AdvertisedCapacity != int32(len(endpoint.Devices)) || observation.ObservedAt.IsZero() || observedNow.Before(observation.ObservedAt) || observedNow.Sub(observation.ObservedAt) > contracts.ObservationMaxAge {
++		sessions := "Unknown"
++		if observation.ActiveSessions != nil {
++			sessions = fmt.Sprint(*observation.ActiveSessions)
++		}
++		message := fmt.Sprintf("post-claim runtime check rejected allocation: health=%s, confidence=%s, active sessions=%s, capacity=%d (expected %d); observation must be current and session-free", observation.Health, observation.Confidence, sessions, observation.AdvertisedCapacity, len(endpoint.Devices))
++		if observeErr != nil {
++			message = "post-claim runtime observation failed: " + observeErr.Error()
++		}
++		return contracts.Reservation{}, contracts.NewError(contracts.ErrorKindConflict, "reserve remote accelerator", message)
++	}
++
++	if err := validateSelectedDevices(target, endpoint.Devices); err != nil {
++		return contracts.Reservation{}, err
++	}
++	if len(target.DeviceIDs) != healthyDeviceCount(endpoint.Devices) {
++		return contracts.Reservation{}, contracts.NewError(
++			contracts.ErrorKindConflict,
++			"reserve remote accelerator",
++			fmt.Sprintf("exclusive endpoint %q exposes %d healthy devices but the workload selected %d; static runtimes cannot hide unselected devices", target.EndpointName, healthyDeviceCount(endpoint.Devices), len(target.DeviceIDs)),
++		)
++	}
++	binding := acceleratorv1alpha1.BoundEndpoint{Name: endpoint.Name, Address: endpoint.Address, Runtime: endpoint.Runtime, Parameters: copyParameters(endpoint.Parameters)}
+ 
+ 	now := time.Now()
+ 	if a.Now != nil {
+@@ -178,7 +158,7 @@
+ 	rollback = false
+ 	return contracts.Reservation{
+ 		BindingID: "remote/" + request.LeaseKey,
+-		Endpoints: bindings,
++		Endpoints: []acceleratorv1alpha1.BoundEndpoint{binding},
+ 		ExpiresAt: now.Add(request.TTL),
+ 	}, nil
+ }
+@@ -187,6 +167,8 @@
+ 	return nil
+ }
+ 
++// Release accepts all recorded legacy targets, even though new reservations
++// have a single target. Never shrink cleanup scope during an upgrade.
+ func (a *RemoteAllocator) Release(ctx context.Context, request contracts.ReservationRequest) error {
+ 	if a.Claimer == nil {
+ 		return contracts.NewError(contracts.ErrorKindInvalid, "release remote accelerator", "endpoint claimer is required")
+--- a/internal/adapter/registry.go
++++ b/internal/adapter/registry.go
+@@ -53,11 +53,7 @@
+ 	registry := &Registry{
+ 		adapters: make(map[string]contracts.ExecutionAdapter, len(adapters)),
+ 	}
+-	providers, err := contracts.NewProviderRegistry()
+-	if err != nil {
+-		return nil, err
+-	}
+-	registry.providers = providers
++	registry.providers = contracts.NewProviderRegistryView(registry)
+ 	for _, execution := range adapters {
+ 		if err := registry.Register(execution); err != nil {
+ 			return nil, err
+@@ -86,9 +82,6 @@
+ 	defer r.mu.Unlock()
+ 	if _, exists := r.adapters[provider.Driver()]; exists {
+ 		return contracts.NewError(contracts.ErrorKindConflict, "register execution adapter", fmt.Sprintf("driver %q is already registered", provider.Driver()))
+-	}
+-	if err := r.providers.Register(provider); err != nil {
+-		return err
+ 	}
+ 	r.adapters[provider.Driver()] = registered
+ 	return nil
+@@ -190,9 +183,18 @@
+ 	return drivers
+ }
+ 
++// GetProvider implements the derived provider view using the same binding map.
++func (r *Registry) GetProvider(driver string) (contracts.Provider, error) {
++	execution, err := r.Get(driver)
++	if err != nil {
++		return nil, err
++	}
++	return execution.Provider(), nil
++}
++
+ // Providers returns the provider view used by configuration and inventory
+-// reconciliation. The returned registry is owned by this Registry and is safe
+-// for concurrent reads and registration during process setup.
++// reconciliation. The returned registry is read-only; register complete bindings
++// with Register so provider and allocator views cannot diverge.
+ func (r *Registry) Providers() *contracts.ProviderRegistry {
+ 	if r == nil {
+ 		return nil
+--- a/internal/contracts/registry.go
++++ b/internal/contracts/registry.go
+@@ -7,9 +7,24 @@
+ 	"sync"
+ )
+ 
++// ProviderSource is the read-only view of the authority that registers complete
++// execution bindings. Standalone ProviderRegistry values remain useful for tests
++// and configuration-only callers; adapter views never maintain a second map.
++type ProviderSource interface {
++	GetProvider(driver string) (Provider, error)
++	Drivers() []string
++}
++
+ type ProviderRegistry struct {
++	source    ProviderSource
+ 	mu        sync.RWMutex
+ 	providers map[string]Provider
++}
++
++// NewProviderRegistryView derives provider lookups from the binding authority.
++// Registration must go through that authority so allocators cannot be omitted.
++func NewProviderRegistryView(source ProviderSource) *ProviderRegistry {
++	return &ProviderRegistry{source: source}
+ }
+ 
+ func NewProviderRegistry(providers ...Provider) (*ProviderRegistry, error) {
+@@ -23,6 +38,9 @@
+ }
+ 
+ func (r *ProviderRegistry) Register(provider Provider) error {
++	if r.source != nil {
++		return NewError(ErrorKindInvalid, "register provider", "provider view is read-only; register the provider and allocator together")
++	}
+ 	if provider == nil || provider.Driver() == "" {
+ 		return NewError(ErrorKindInvalid, "register provider", "provider and driver are required")
+ 	}
+@@ -37,6 +55,9 @@
+ }
+ 
+ func (r *ProviderRegistry) Get(driver string) (Provider, error) {
++	if r.source != nil {
++		return r.source.GetProvider(driver)
++	}
+ 	r.mu.RLock()
+ 	provider, exists := r.providers[driver]
+ 	r.mu.RUnlock()
+@@ -47,6 +68,9 @@
+ }
+ 
+ func (r *ProviderRegistry) Drivers() []string {
++	if r.source != nil {
++		return r.source.Drivers()
++	}
+ 	r.mu.RLock()
+ 	drivers := make([]string, 0, len(r.providers))
+ 	for driver := range r.providers {
+--- a/internal/controller/workload_controller.go
++++ b/internal/controller/workload_controller.go
+@@ -342,6 +342,20 @@
+ 	}
+ 	reservation, err := allocator.Reserve(ctx, request)
+ 	if err != nil {
++		if contracts.IsErrorKind(err, contracts.ErrorKindTransient) {
++			// Acquisition/rollback may have an unknown commit result. Keep the
++			// same Pending Lease and finalizer; do not spend a fallback attempt
++			// or publish a terminal phase while ownership is unconfirmed.
++			setCondition(&lease.Status.Conditions, lease.Generation, ConditionReserved, metav1.ConditionFalse, "ReservationRetrying", err.Error(), r.now())
++			if statusErr := r.updateLeaseStatus(ctx, lease); statusErr != nil {
++				return ctrl.Result{}, statusErr
++			}
++			setCondition(&workload.Status.Conditions, workload.Generation, ConditionReserved, metav1.ConditionFalse, "ReservationRetrying", err.Error(), r.now())
++			if statusErr := r.updateWorkloadStatus(ctx, workload); statusErr != nil {
++				return ctrl.Result{}, statusErr
++			}
++			return ctrl.Result{}, err
++		}
+ 		reason := ""
+ 		switch {
+ 		case contracts.IsErrorKind(err, contracts.ErrorKindConflict), contracts.IsErrorKind(err, contracts.ErrorKindUnschedulable):
+--- /dev/null
++++ b/internal/adapter/registry_view_test.go
+@@ -0,0 +1,35 @@
++package adapter
++
++import (
++	"testing"
++
++	api "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
++	"github.com/qcrs/accelerator-control-plane/internal/contracts"
++)
++
++func TestProviderViewCannotRegisterWithoutAllocator(t *testing.T) {
++	registry, err := NewRegistry()
++	if err != nil {
++		t.Fatal(err)
++	}
++	view := registry.Providers()
++	provider := &stubProvider{driver: "unpaired", mode: api.ExecutionModeLocal}
++	if err := view.Register(provider); !contracts.IsErrorKind(err, contracts.ErrorKindInvalid) {
++		t.Fatalf("provider-only registration escaped binding authority: %v", err)
++	}
++	if len(view.Drivers()) != 0 || len(registry.Drivers()) != 0 {
++		t.Fatal("rejected registration changed a registry")
++	}
++	allocator := &recordingAllocator{}
++	if err := registry.Register(NewBinding(provider, allocator)); err != nil {
++		t.Fatal(err)
++	}
++	got, err := view.Get(provider.Driver())
++	if err != nil || got != provider {
++		t.Fatalf("existing provider view did not reflect a new binding: %v %v", got, err)
++	}
++	binding, err := registry.Get(provider.Driver())
++	if err != nil || binding.Provider() != got || binding.Allocator() != allocator {
++		t.Fatal("provider/allocator pair diverged")
++	}
++}
+--- /dev/null
++++ b/internal/allocation/remote_transaction_test.go
+@@ -0,0 +1,78 @@
++package allocation
++
++import (
++	"context"
++	"errors"
++	"testing"
++	"time"
++
++	api "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
++	"github.com/qcrs/accelerator-control-plane/internal/contracts"
++)
++
++type failingRollbackClaimer struct {
++	fakeEndpointClaimer
++	releaseErr error
++	claims     int
++}
++
++func (c *failingRollbackClaimer) Claim(ctx context.Context, claim EndpointClaim) error {
++	c.claims++
++	return c.fakeEndpointClaimer.Claim(ctx, claim)
++}
++func (c *failingRollbackClaimer) Release(ctx context.Context, claim EndpointClaim) error {
++	if c.releaseErr != nil {
++		return c.releaseErr
++	}
++	return c.fakeEndpointClaimer.Release(ctx, claim)
++}
++
++func TestRollbackFailureDominatesOriginalReservationError(t *testing.T) {
++	for _, kind := range []contracts.ErrorKind{contracts.ErrorKindConflict, contracts.ErrorKindInvalid} {
++		t.Run(string(kind), func(t *testing.T) {
++			cause := contracts.NewError(kind, "validate test endpoint", "target changed")
++			releaseErr := errors.New("API server unavailable during release")
++			claimer := &failingRollbackClaimer{releaseErr: releaseErr}
++			endpoint := contracts.RemoteEndpoint{Name: "a", PoolName: "remote", Address: "a", Runtime: api.RuntimeInfo{Driver: "test"}, Readiness: &contracts.EndpointReadiness{Ready: true}, Devices: []api.DeviceInfo{{ID: "0", Health: api.DeviceHealthHealthy}}}
++			allocator := &RemoteAllocator{Resolver: fakeResolver{"a": endpoint}, Validator: fakeEndpointValidator(func(contracts.RemoteEndpoint) error { return cause }), Claimer: claimer}
++			request := contracts.ReservationRequest{Mode: api.ExecutionModeRemote, PoolName: "remote", LeaseKey: "held", TTL: time.Minute, Targets: []api.AllocationTarget{{EndpointName: "a", Exclusive: true, DeviceIDs: []string{"0"}}}}
++			_, err := allocator.Reserve(context.Background(), request)
++			if !contracts.IsErrorKind(err, contracts.ErrorKindTransient) || contracts.IsErrorKind(err, kind) {
++				t.Fatalf("rollback failure classified as safe terminal rejection: %v", err)
++			}
++			if !errors.Is(err, cause) || !errors.Is(err, releaseErr) {
++				t.Fatalf("lost acquisition/rollback cause: %v", err)
++			}
++			if claimer.holders["a"] != "held" {
++				t.Fatal("failed release unexpectedly dropped ownership")
++			}
++			claimer.releaseErr = nil
++			if err := allocator.Release(context.Background(), request); err != nil {
++				t.Fatal(err)
++			}
++			if claimer.holders["a"] != "" {
++				t.Fatal("confirmed release left claim held")
++			}
++		})
++	}
++}
++
++func TestInvalidSingleTargetDoesNotAcquireClaim(t *testing.T) {
++	claimer := &failingRollbackClaimer{}
++	allocator := &RemoteAllocator{Resolver: fakeResolver{}, Validator: fakeEndpointValidator(func(contracts.RemoteEndpoint) error { return nil }), Claimer: claimer}
++	_, err := allocator.Reserve(context.Background(), contracts.ReservationRequest{Mode: api.ExecutionModeRemote, LeaseKey: "invalid", TTL: time.Minute, Targets: []api.AllocationTarget{{EndpointName: "a", Exclusive: true}}})
++	if !contracts.IsErrorKind(err, contracts.ErrorKindInvalid) || claimer.claims != 0 {
++		t.Fatalf("invalid target touched ownership: %v claims=%d", err, claimer.claims)
++	}
++}
++
++func TestReleaseStillCleansAllLegacyTargets(t *testing.T) {
++	claimer := &fakeEndpointClaimer{holders: map[string]string{"a": "old", "b": "old"}}
++	allocator := &RemoteAllocator{Claimer: claimer}
++	if err := allocator.Release(context.Background(), contracts.ReservationRequest{LeaseKey: "old", Targets: []api.AllocationTarget{{EndpointName: "a"}, {EndpointName: "b"}, {EndpointName: "a"}}}); err != nil {
++		t.Fatal(err)
++	}
++	if len(claimer.holders) != 0 {
++		t.Fatalf("legacy cleanup lost targets: %+v", claimer.holders)
++	}
++}
+--- /dev/null
++++ b/internal/controller/reservation_retry_test.go
+@@ -0,0 +1,105 @@
++package controller
++
++import (
++	"context"
++	"errors"
++	"testing"
++
++	api "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
++	"github.com/qcrs/accelerator-control-plane/internal/allocation"
++	"github.com/qcrs/accelerator-control-plane/internal/contracts"
++	cricketprovider "github.com/qcrs/accelerator-control-plane/internal/provider/cricket"
++	"sigs.k8s.io/controller-runtime/pkg/client"
++	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
++)
++
++type rollbackFailureForController struct {
++	allocation.EndpointClaimer
++	fail bool
++}
++
++func (c *rollbackFailureForController) Release(ctx context.Context, claim allocation.EndpointClaim) error {
++	if c.fail {
++		return errors.New("temporary claim delete failure")
++	}
++	return c.EndpointClaimer.Release(ctx, claim)
++}
++
++type changedAfterClaimResolver struct {
++	contracts.EndpointResolver
++	unavailable bool
++}
++
++func (r *changedAfterClaimResolver) Resolve(ctx context.Context, name string) (contracts.RemoteEndpoint, error) {
++	endpoint, err := r.EndpointResolver.Resolve(ctx, name)
++	if err == nil && r.unavailable {
++		endpoint.Readiness = &contracts.EndpointReadiness{Ready: false, Reason: "ChangedAfterSelection", Message: "endpoint health changed after selection"}
++	}
++	return endpoint, err
++}
++
++func TestFailedReservationRollbackRetainsLeaseAndDoesNotFallback(t *testing.T) {
++	h := newControllerHarness(t, "rollback-owned", []api.ExecutionMode{api.ExecutionModeRemote, api.ExecutionModeLocal}, nil)
++	execution, err := h.adapters.Get(cricketprovider.DriverName)
++	if err != nil {
++		t.Fatal(err)
++	}
++	allocator := execution.Allocator().(*allocation.RemoteAllocator)
++	resolver := &changedAfterClaimResolver{EndpointResolver: allocator.Resolver, unavailable: true}
++	claimer := &rollbackFailureForController{EndpointClaimer: allocator.Claimer, fail: true}
++	allocator.Resolver = resolver
++	allocator.Claimer = claimer
++	var lease api.AcceleratorLease
++	for i := 0; i < 8; i++ {
++		h.reconcile(t)
++		w := h.workload(t)
++		if w.Status.AllocationRef == "" {
++			continue
++		}
++		if err := h.client.Get(h.ctx, client.ObjectKey{Namespace: w.Namespace, Name: w.Status.AllocationRef}, &lease); err != nil {
++			t.Fatal(err)
++		}
++		if lease.Status.Phase == api.AllocationPhasePending {
++			break
++		}
++	}
++	if lease.Status.Phase != api.AllocationPhasePending {
++		t.Fatal("did not reach Pending lease")
++	}
++	ref := lease.Name
++	_, err = h.reconciler.Reconcile(h.ctx, h.request)
++	if !contracts.IsErrorKind(err, contracts.ErrorKindTransient) {
++		t.Fatalf("rollback uncertainty was not retried: %v", err)
++	}
++	w := h.workload(t)
++	if w.Status.AllocationRef != ref || w.Status.Fallback.FailedAttempts != 0 || len(w.Status.Fallback.History) != 0 || w.Status.PodRef != nil {
++		t.Fatalf("uncertain ownership caused a new attempt or Pod: %+v", w.Status)
++	}
++	if err := h.client.Get(h.ctx, client.ObjectKeyFromObject(&lease), &lease); err != nil {
++		t.Fatal(err)
++	}
++	if lease.Status.Phase != api.AllocationPhasePending || !controllerutil.ContainsFinalizer(&lease, LeaseFinalizer) {
++		t.Fatalf("lease marked terminal despite unconfirmed release: %+v", lease)
++	}
++	if c := findMetaCondition(w.Status.Conditions, ConditionReserved); c == nil || c.Reason != "ReservationRetrying" {
++		t.Fatalf("retry reason is not visible: %+v", c)
++	}
++	if h.claimer.holders["endpoint-a"] == "" {
++		t.Fatal("test did not retain a held claim")
++	}
++	// Reconstruct the controller and retry the same lease after recovery.
++	resolver.unavailable = false
++	claimer.fail = false
++	h.reconciler = h.newReconciler()
++	w = h.runUntilStarting(t, api.ExecutionModeRemote)
++	if w.Status.AllocationRef != ref || w.Status.Fallback.FailedAttempts != 0 {
++		t.Fatalf("recovery used a second allocation: %+v", w.Status)
++	}
++	var leases api.AcceleratorLeaseList
++	if err := h.client.List(h.ctx, &leases); err != nil {
++		t.Fatal(err)
++	}
++	if len(leases.Items) != 1 {
++		t.Fatalf("recovery created duplicate leases: %d", len(leases.Items))
++	}
++}

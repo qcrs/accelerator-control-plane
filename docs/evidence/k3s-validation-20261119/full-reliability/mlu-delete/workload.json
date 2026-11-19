@@ -1,0 +1,171 @@
+{
+  "apiVersion": "accelerator.qcrs.io/v1alpha1",
+  "kind": "AcceleratorWorkload",
+  "metadata": {
+    "creationTimestamp": "2026-11-19T09:49:38Z",
+    "finalizers": [
+      "accelerator.qcrs.io/workload-protection"
+    ],
+    "generation": 2,
+    "name": "mlu-delete",
+    "namespace": "accelerator-validation-1119094357",
+    "resourceVersion": "266835",
+    "uid": "833e1f9f-9f23-4a66-9d8e-fe355ffd98c5"
+  },
+  "spec": {
+    "accelerator": {
+      "containerName": "worker",
+      "count": 1,
+      "deviceType": "NPU",
+      "memory": "0",
+      "vendor": "cambricon"
+    },
+    "placement": {
+      "fallback": {
+        "backoff": "2s",
+        "enabled": true,
+        "maxAttempts": 2,
+        "startupTimeout": "2m0s"
+      },
+      "mode": "Auto",
+      "order": [
+        "Local",
+        "Remote"
+      ],
+      "reservationTTL": "5m0s"
+    },
+    "podTemplate": {
+      "metadata": {
+        "labels": {
+          "app": "mlu-remote-smoke"
+        }
+      },
+      "spec": {
+        "activeDeadlineSeconds": 240,
+        "automountServiceAccountToken": false,
+        "containers": [
+          {
+            "args": [
+              "for device in /dev/nvidia* /dev/iluvatar* /dev/cambricon* /dev/cndrv* /dev/davinci* /dev/ascend*; do\n  if [ -e \"$device\" ]; then echo \"FAIL local accelerator visible: $device\"; exit 80; fi\ndone\necho LOCAL_ACCELERATOR_DEVICES=NONE\ni=0\nwhile [ \"$i\" -lt 1 ]; do\n  /opt/workload/mlu-remote-custom-kernel-test\n  i=$((i + 1))\n  if [ \"$i\" -lt 1 ]; then sleep 2; fi\ndone\necho KERNEL_FINISHED\nsleep 120\nexit 0\n"
+            ],
+            "command": [
+              "/bin/sh",
+              "-ec"
+            ],
+            "image": "mlu-workload:arm64-observed-v1",
+            "imagePullPolicy": "Never",
+            "name": "worker",
+            "resources": {
+              "limits": {
+                "memory": "128Mi"
+              },
+              "requests": {
+                "cpu": "10m",
+                "memory": "32Mi"
+              }
+            },
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "runAsNonRoot": true,
+              "runAsUser": 65532
+            }
+          }
+        ],
+        "restartPolicy": "Never"
+      }
+    }
+  },
+  "status": {
+    "allocationAttempt": 1,
+    "allocationRef": "mlu-delete-833e1f9f-lease-1",
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-19T09:49:38Z",
+        "message": "workload specification is valid",
+        "observedGeneration": 2,
+        "reason": "Valid",
+        "status": "True",
+        "type": "Accepted"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T09:49:38Z",
+        "message": "selected 1 remote device(s) from endpoint mlu-remote-server in pool mlu-remote",
+        "observedGeneration": 2,
+        "reason": "Selected",
+        "status": "True",
+        "type": "Selected"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T09:49:38Z",
+        "message": "accelerator capacity is reserved",
+        "observedGeneration": 2,
+        "reason": "Reserved",
+        "status": "True",
+        "type": "Reserved"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T09:49:38Z",
+        "message": "runtime configuration was injected and the workload Pod was created",
+        "observedGeneration": 2,
+        "reason": "Materialized",
+        "status": "True",
+        "type": "RuntimeReady"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T09:49:39Z",
+        "message": "pod is running and ready",
+        "observedGeneration": 2,
+        "reason": "Ready",
+        "status": "True",
+        "type": "PodReady"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T09:49:38Z",
+        "message": "all selected remote endpoints remain configured and ready",
+        "observedGeneration": 2,
+        "reason": "EndpointsHealthy",
+        "status": "False",
+        "type": "Degraded"
+      }
+    ],
+    "decision": {
+      "decidedAt": "2026-11-19T09:49:38Z",
+      "mode": "Remote",
+      "policy": "local-first-fit/v1",
+      "poolRef": {
+        "name": "mlu-remote"
+      },
+      "providerRef": {
+        "name": "mlu-remote"
+      },
+      "reason": "selected 1 remote device(s) from endpoint mlu-remote-server in pool mlu-remote",
+      "targets": [
+        {
+          "deviceIDs": [
+            "mlu-0"
+          ],
+          "endpointName": "mlu-remote-server",
+          "exclusive": true
+        }
+      ]
+    },
+    "fallback": {
+      "readyObserved": true
+    },
+    "observedGeneration": 2,
+    "phase": "Running",
+    "podRef": {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "name": "mlu-delete-833e1f9f",
+      "namespace": "accelerator-validation-1119094357",
+      "uid": "bca4baf1-3584-4fcb-a28b-ca5551299612"
+    },
+    "selectedMode": "Remote"
+  }
+}

@@ -1,0 +1,15 @@
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  449.1kB
+Step 1/3 : FROM ubuntu:22.04
+ ---> a4b6ef03a473
+Step 2/3 : ARG DRIVER
+ ---> Using cache
+ ---> 98bf378c0792
+Step 3/3 : COPY lib/ /opt/${DRIVER}-remote/lib/
+ ---> Using cache
+ ---> ea0f6bbd0861
+Successfully built ea0f6bbd0861
+Successfully tagged mlu-remote-client:arm64-observed-v1

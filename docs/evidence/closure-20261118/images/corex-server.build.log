@@ -1,0 +1,44 @@
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  22.44MB
+Step 1/11 : FROM ubuntu:22.04
+ ---> a4b6ef03a473
+Step 2/11 : COPY bin/ /opt/runtime/bin/
+ ---> 5dba53de25b0
+Step 3/11 : COPY lib/ /opt/runtime/lib/
+ ---> 2675f2ead0e0
+Step 4/11 : COPY modules/ /opt/runtime/modules/
+ ---> 64991389067a
+Step 5/11 : ENV LD_LIBRARY_PATH=/opt/runtime/lib
+ ---> Running in ef496a2bed04
+ ---> Removed intermediate container ef496a2bed04
+ ---> 195ea84faa0c
+Step 6/11 : ENV MLU_REMOTE_MODULE_DIR=/opt/runtime/modules
+ ---> Running in 6e3c14f56f3d
+ ---> Removed intermediate container 6e3c14f56f3d
+ ---> 05348c4087a1
+Step 7/11 : ENV COREX_REMOTE_BIND=0.0.0.0 MLU_REMOTE_BIND=0.0.0.0
+ ---> Running in 33c354a2e04d
+ ---> Removed intermediate container 33c354a2e04d
+ ---> 73d3923be16f
+Step 8/11 : ENV COREX_REMOTE_PORT=50051 MLU_REMOTE_PORT=50051
+ ---> Running in c93865c7565a
+ ---> Removed intermediate container c93865c7565a
+ ---> 271fe57dedb8
+Step 9/11 : ENV COREX_REMOTE_OBSERVATION_PORT=50052 MLU_REMOTE_OBSERVATION_PORT=50052
+ ---> Running in c831e5c3ec0d
+ ---> Removed intermediate container c831e5c3ec0d
+ ---> dc1c14cc4485
+Step 10/11 : EXPOSE 50051 50052
+ ---> Running in d1d1d4d45b34
+ ---> Removed intermediate container d1d1d4d45b34
+ ---> 1b1ffc506559
+Step 11/11 : ENTRYPOINT ["/opt/runtime/bin/server"]
+ ---> Running in 52b4f91d9888
+ ---> Removed intermediate container 52b4f91d9888
+ ---> 8013aed2d499
+[Warning] One or more build-args [DRIVER] were not consumed
+Successfully built 8013aed2d499
+Successfully tagged corex-remote-server:arm64-observed-v1

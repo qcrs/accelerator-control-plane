@@ -126,9 +126,9 @@ func summarizeRemotePool(
 			operational = false
 		}
 		for _, device := range endpoint.Spec.Devices {
+			total++ // advertised capacity is not erased by a health failure
 			if device.Health == acceleratorv1alpha1.DeviceHealthHealthy {
 				healthy[device.ID] = struct{}{}
-				total++
 			}
 			if device.UUID != "" {
 				if _, duplicate := duplicates[device.UUID]; duplicate {
@@ -143,7 +143,7 @@ func summarizeRemotePool(
 		}
 		endpointReserved := int64(0)
 		if _, exclusive := occupied.Endpoints[endpoint.Name]; exclusive {
-			endpointReserved = int64(len(healthy))
+			endpointReserved = int64(len(endpoint.Spec.Devices))
 		} else {
 			for deviceID := range occupied.Devices[endpoint.Name] {
 				if _, exists := healthy[deviceID]; exists {

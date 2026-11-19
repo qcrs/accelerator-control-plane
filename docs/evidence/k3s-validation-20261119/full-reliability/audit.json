@@ -1,0 +1,60 @@
+{
+  "result": "PASS",
+  "auditedAt": "2026-11-19T09:55:10.915584+00:00",
+  "scenarios": 13,
+  "workloads": {
+    "successfulNumericalWorkloads": 11,
+    "expectedPostReadyFailures": 2,
+    "runningWorkloadDeletions": 2
+  },
+  "lifecycle": {
+    "sampleCount": 72,
+    "unknownObservationsWithZeroAvailable": 19,
+    "reservedWithZeroSessionsAndZeroAvailable": 38,
+    "internalStatusInvariantViolations": 0
+  },
+  "allCapturedRuntimeConfigDigestsMatch": true,
+  "systemImages": [
+    {
+      "pod": "accelerator-manager-7455cbdf97-5qvvx",
+      "images": [
+        {
+          "image": "docker.io/library/accelerator-control-plane:arm64-logic-20261119-v3",
+          "configDigest": "sha256:00cc02c5452953b3a8f710c52f4baf931cd6dc76e45fc085354be695fc7f87cd"
+        }
+      ]
+    },
+    {
+      "pod": "accelerator-manager-7455cbdf97-fmczx",
+      "images": [
+        {
+          "image": "docker.io/library/accelerator-control-plane:arm64-logic-20261119-v3",
+          "configDigest": "sha256:00cc02c5452953b3a8f710c52f4baf931cd6dc76e45fc085354be695fc7f87cd"
+        }
+      ]
+    },
+    {
+      "pod": "corex-remote-server-0",
+      "images": [
+        {
+          "image": "docker.io/library/corex-remote-server:arm64-observed-v4",
+          "configDigest": "sha256:e9995d45712ce7e917d404132d94284c2793cbf97cf9865318a6c84644e75878"
+        }
+      ]
+    },
+    {
+      "pod": "mlu-remote-server-579b7f5c9f-hnm79",
+      "images": [
+        {
+          "image": "docker.io/library/mlu-remote-server:arm64-observed-v4",
+          "configDigest": "sha256:0e32f6cb2e45eac386e4cec525aa9c167ba61fd752c58ec3144543114890fa2a"
+        }
+      ]
+    }
+  ],
+  "allPlatformTasksTerminal": true,
+  "endpointClaimsRemaining": 0,
+  "testServicesRemaining": 0,
+  "originalCorexAddressRestored": true,
+  "physicalTopology": "one ARM node, isolated clients without accelerator devices, real GPU/NPU servers"
+}

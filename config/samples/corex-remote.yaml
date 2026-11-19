@@ -7,7 +7,7 @@ spec:
   deviceKinds:
     - GPU
   clientRuntime:
-    image: corex-remote-client:arm64
+    image: corex-remote-client:arm64-observed-v1
     runtimeVersion: corex-remote-arm64-4.4
     sourcePath: /opt/corex-remote/lib
     mountPath: /opt/accelerator/corex
@@ -44,6 +44,8 @@ spec:
     driver: corex-remote
     version: corex-remote-arm64-4.4
     apiVersion: "3"
+  parameters:
+    observationPort: "50052"
   devices:
     - id: gpu-0
       vendor: iluvatar
@@ -74,7 +76,10 @@ spec:
       restartPolicy: Never
       containers:
         - name: worker
-          image: corex-workload:arm64
+          image: corex-workload:arm64-observed-v1
           imagePullPolicy: Never
           command: ["/opt/workload/driver_smoke_app"]
           args: ["/opt/workload/driver_kernel.cubin"]
+          env:
+            - name: COREX_SMOKE_TRACE
+              value: "1"

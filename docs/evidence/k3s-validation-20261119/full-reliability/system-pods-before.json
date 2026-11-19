@@ -1,0 +1,1141 @@
+{
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "annotations": {
+          "kubectl.kubernetes.io/restartedAt": "2026-11-16T12:47:10Z"
+        },
+        "creationTimestamp": "2026-11-19T09:43:08Z",
+        "generateName": "accelerator-manager-5f6d8d9d4c-",
+        "generation": 1,
+        "labels": {
+          "app.kubernetes.io/name": "accelerator-control-plane",
+          "pod-template-hash": "5f6d8d9d4c"
+        },
+        "name": "accelerator-manager-5f6d8d9d4c-jssn7",
+        "namespace": "accelerator-system",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "ReplicaSet",
+            "name": "accelerator-manager-5f6d8d9d4c",
+            "uid": "00952302-1166-479f-a809-06d2f114842f"
+          }
+        ],
+        "resourceVersion": "265690",
+        "uid": "95afcace-33e7-4877-a9bf-2e679db8a197"
+      },
+      "spec": {
+        "containers": [
+          {
+            "args": [
+              "--leader-elect=true",
+              "--metrics-bind-address=:8080",
+              "--health-probe-bind-address=:8081",
+              "--coordination-namespace=accelerator-system"
+            ],
+            "image": "accelerator-control-plane:arm64-logic-20261119-v3",
+            "imagePullPolicy": "Never",
+            "livenessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/healthz",
+                "port": "health",
+                "scheme": "HTTP"
+              },
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "name": "manager",
+            "ports": [
+              {
+                "containerPort": 8080,
+                "name": "metrics",
+                "protocol": "TCP"
+              },
+              {
+                "containerPort": 8081,
+                "name": "health",
+                "protocol": "TCP"
+              }
+            ],
+            "readinessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/readyz",
+                "port": "health",
+                "scheme": "HTTP"
+              },
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "resources": {
+              "limits": {
+                "cpu": "1",
+                "memory": "512Mi"
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              }
+            },
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "readOnlyRootFilesystem": true
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-kz9nr",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "nodeName": "server310p",
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {
+          "runAsNonRoot": true,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "serviceAccount": "accelerator-manager",
+        "serviceAccountName": "accelerator-manager",
+        "terminationGracePeriodSeconds": 10,
+        "tolerations": [
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "name": "kube-api-access-kz9nr",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ],
+                    "name": "kube-root-ca.crt"
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        },
+                        "path": "namespace"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": {
+        "allocatedResources": {
+          "cpu": "100m",
+          "memory": "128Mi"
+        },
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:43:08Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodReadyToStartContainers"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:43:08Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Initialized"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:43:09Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Ready"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:43:09Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "ContainersReady"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:43:08Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodScheduled"
+          }
+        ],
+        "containerStatuses": [
+          {
+            "allocatedResources": {
+              "cpu": "100m",
+              "memory": "128Mi"
+            },
+            "containerID": "containerd://2dd5d65f16bf338eb53338182672234991cae1365ff5e2b2555c05ba5f94377d",
+            "image": "docker.io/library/accelerator-control-plane:arm64-logic-20261119-v3",
+            "imageID": "sha256:00cc02c5452953b3a8f710c52f4baf931cd6dc76e45fc085354be695fc7f87cd",
+            "lastState": {},
+            "name": "manager",
+            "ready": true,
+            "resources": {
+              "limits": {
+                "cpu": "1",
+                "memory": "512Mi"
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              }
+            },
+            "restartCount": 0,
+            "started": true,
+            "state": {
+              "running": {
+                "startedAt": "2026-11-19T09:43:08Z"
+              }
+            },
+            "user": {
+              "linux": {
+                "gid": 65532,
+                "supplementalGroups": [
+                  65532
+                ],
+                "uid": 65532
+              }
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-kz9nr",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              }
+            ]
+          }
+        ],
+        "hostIP": "192.168.31.244",
+        "hostIPs": [
+          {
+            "ip": "192.168.31.244"
+          }
+        ],
+        "observedGeneration": 1,
+        "phase": "Running",
+        "podIP": "10.42.0.99",
+        "podIPs": [
+          {
+            "ip": "10.42.0.99"
+          }
+        ],
+        "qosClass": "Burstable",
+        "resources": {
+          "limits": {
+            "cpu": "1",
+            "memory": "512Mi"
+          },
+          "requests": {
+            "cpu": "79m",
+            "memory": "128Mi"
+          }
+        },
+        "startTime": "2026-11-19T09:43:08Z"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "annotations": {
+          "kubectl.kubernetes.io/restartedAt": "2026-11-16T12:47:10Z"
+        },
+        "creationTimestamp": "2026-11-19T09:43:07Z",
+        "generateName": "accelerator-manager-5f6d8d9d4c-",
+        "generation": 1,
+        "labels": {
+          "app.kubernetes.io/name": "accelerator-control-plane",
+          "pod-template-hash": "5f6d8d9d4c"
+        },
+        "name": "accelerator-manager-5f6d8d9d4c-rqbmj",
+        "namespace": "accelerator-system",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "ReplicaSet",
+            "name": "accelerator-manager-5f6d8d9d4c",
+            "uid": "00952302-1166-479f-a809-06d2f114842f"
+          }
+        ],
+        "resourceVersion": "265624",
+        "uid": "9cf49f3b-dc03-4e7d-a9b5-125dfbe6755e"
+      },
+      "spec": {
+        "containers": [
+          {
+            "args": [
+              "--leader-elect=true",
+              "--metrics-bind-address=:8080",
+              "--health-probe-bind-address=:8081",
+              "--coordination-namespace=accelerator-system"
+            ],
+            "image": "accelerator-control-plane:arm64-logic-20261119-v3",
+            "imagePullPolicy": "Never",
+            "livenessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/healthz",
+                "port": "health",
+                "scheme": "HTTP"
+              },
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "name": "manager",
+            "ports": [
+              {
+                "containerPort": 8080,
+                "name": "metrics",
+                "protocol": "TCP"
+              },
+              {
+                "containerPort": 8081,
+                "name": "health",
+                "protocol": "TCP"
+              }
+            ],
+            "readinessProbe": {
+              "failureThreshold": 3,
+              "httpGet": {
+                "path": "/readyz",
+                "port": "health",
+                "scheme": "HTTP"
+              },
+              "periodSeconds": 10,
+              "successThreshold": 1,
+              "timeoutSeconds": 1
+            },
+            "resources": {
+              "limits": {
+                "cpu": "1",
+                "memory": "512Mi"
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              }
+            },
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "readOnlyRootFilesystem": true
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-82dkr",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "nodeName": "server310p",
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {
+          "runAsNonRoot": true,
+          "seccompProfile": {
+            "type": "RuntimeDefault"
+          }
+        },
+        "serviceAccount": "accelerator-manager",
+        "serviceAccountName": "accelerator-manager",
+        "terminationGracePeriodSeconds": 10,
+        "tolerations": [
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "name": "kube-api-access-82dkr",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ],
+                    "name": "kube-root-ca.crt"
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        },
+                        "path": "namespace"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": {
+        "allocatedResources": {
+          "cpu": "100m",
+          "memory": "128Mi"
+        },
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:43:08Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodReadyToStartContainers"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:43:07Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Initialized"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:43:08Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Ready"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:43:08Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "ContainersReady"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:43:07Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodScheduled"
+          }
+        ],
+        "containerStatuses": [
+          {
+            "allocatedResources": {
+              "cpu": "100m",
+              "memory": "128Mi"
+            },
+            "containerID": "containerd://d8c15a82511de068639300b923eb27c7d22c663f116eb4263485edc171c0ac33",
+            "image": "docker.io/library/accelerator-control-plane:arm64-logic-20261119-v3",
+            "imageID": "sha256:00cc02c5452953b3a8f710c52f4baf931cd6dc76e45fc085354be695fc7f87cd",
+            "lastState": {},
+            "name": "manager",
+            "ready": true,
+            "resources": {
+              "limits": {
+                "cpu": "1",
+                "memory": "512Mi"
+              },
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              }
+            },
+            "restartCount": 0,
+            "started": true,
+            "state": {
+              "running": {
+                "startedAt": "2026-11-19T09:43:08Z"
+              }
+            },
+            "user": {
+              "linux": {
+                "gid": 65532,
+                "supplementalGroups": [
+                  65532
+                ],
+                "uid": 65532
+              }
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-82dkr",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              }
+            ]
+          }
+        ],
+        "hostIP": "192.168.31.244",
+        "hostIPs": [
+          {
+            "ip": "192.168.31.244"
+          }
+        ],
+        "observedGeneration": 1,
+        "phase": "Running",
+        "podIP": "10.42.0.98",
+        "podIPs": [
+          {
+            "ip": "10.42.0.98"
+          }
+        ],
+        "qosClass": "Burstable",
+        "resources": {
+          "limits": {
+            "cpu": "1",
+            "memory": "512Mi"
+          },
+          "requests": {
+            "cpu": "100m",
+            "memory": "128Mi"
+          }
+        },
+        "startTime": "2026-11-19T09:43:07Z"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T09:43:06Z",
+        "generateName": "corex-remote-server-",
+        "generation": 1,
+        "labels": {
+          "accelerator.qcrs.io/runtime": "corex-remote",
+          "app.kubernetes.io/name": "corex-remote-server",
+          "apps.kubernetes.io/pod-index": "0",
+          "controller-revision-hash": "corex-remote-server-5fd9b8b559",
+          "statefulset.kubernetes.io/pod-name": "corex-remote-server-0"
+        },
+        "name": "corex-remote-server-0",
+        "namespace": "accelerator-system",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "StatefulSet",
+            "name": "corex-remote-server",
+            "uid": "27b9dac6-ff32-45c5-a605-e7d34bcf1fe9"
+          }
+        ],
+        "resourceVersion": "265596",
+        "uid": "d2faf48c-7da9-4dd7-a4e9-5cb8902d77d2"
+      },
+      "spec": {
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "COREX_REMOTE_BIND",
+                "value": "0.0.0.0"
+              },
+              {
+                "name": "COREX_REMOTE_PORT",
+                "value": "50051"
+              },
+              {
+                "name": "COREX_REMOTE_OBSERVATION_PORT",
+                "value": "50052"
+              }
+            ],
+            "image": "corex-remote-server:arm64-observed-v4",
+            "imagePullPolicy": "Never",
+            "name": "server",
+            "ports": [
+              {
+                "containerPort": 50051,
+                "name": "remote",
+                "protocol": "TCP"
+              },
+              {
+                "containerPort": 50052,
+                "name": "observation",
+                "protocol": "TCP"
+              }
+            ],
+            "resources": {},
+            "securityContext": {
+              "privileged": true
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/dev/iluvatar0",
+                "name": "iluvatar0"
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-dclft",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "hostname": "corex-remote-server-0",
+        "nodeName": "server310p",
+        "nodeSelector": {
+          "kubernetes.io/arch": "arm64"
+        },
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {},
+        "serviceAccount": "default",
+        "serviceAccountName": "default",
+        "subdomain": "corex-remote-server",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "hostPath": {
+              "path": "/dev/iluvatar0",
+              "type": "CharDevice"
+            },
+            "name": "iluvatar0"
+          },
+          {
+            "name": "kube-api-access-dclft",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ],
+                    "name": "kube-root-ca.crt"
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        },
+                        "path": "namespace"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": {
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:43:06Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodReadyToStartContainers"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:43:06Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Initialized"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:43:06Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Ready"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:43:06Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "ContainersReady"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:43:06Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodScheduled"
+          }
+        ],
+        "containerStatuses": [
+          {
+            "containerID": "containerd://2e3c02f47337670423fe1f5a11866295ea1f5c675bc1764cf38d3abe3ea15938",
+            "image": "docker.io/library/corex-remote-server:arm64-observed-v4",
+            "imageID": "sha256:e9995d45712ce7e917d404132d94284c2793cbf97cf9865318a6c84644e75878",
+            "lastState": {},
+            "name": "server",
+            "ready": true,
+            "resources": {},
+            "restartCount": 0,
+            "started": true,
+            "state": {
+              "running": {
+                "startedAt": "2026-11-19T09:43:06Z"
+              }
+            },
+            "user": {
+              "linux": {
+                "gid": 0,
+                "supplementalGroups": [
+                  0
+                ],
+                "uid": 0
+              }
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/dev/iluvatar0",
+                "name": "iluvatar0"
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-dclft",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              }
+            ]
+          }
+        ],
+        "hostIP": "192.168.31.244",
+        "hostIPs": [
+          {
+            "ip": "192.168.31.244"
+          }
+        ],
+        "observedGeneration": 1,
+        "phase": "Running",
+        "podIP": "10.42.0.97",
+        "podIPs": [
+          {
+            "ip": "10.42.0.97"
+          }
+        ],
+        "qosClass": "BestEffort",
+        "resources": {},
+        "startTime": "2026-11-19T09:43:06Z"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T09:42:35Z",
+        "generateName": "mlu-remote-server-579b7f5c9f-",
+        "generation": 1,
+        "labels": {
+          "accelerator.qcrs.io/runtime": "mlu-remote",
+          "app.kubernetes.io/name": "mlu-remote-server",
+          "pod-template-hash": "579b7f5c9f"
+        },
+        "name": "mlu-remote-server-579b7f5c9f-lwn4r",
+        "namespace": "accelerator-system",
+        "ownerReferences": [
+          {
+            "apiVersion": "apps/v1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "ReplicaSet",
+            "name": "mlu-remote-server-579b7f5c9f",
+            "uid": "8ba05639-e318-4379-aaa0-d6142de3dc0c"
+          }
+        ],
+        "resourceVersion": "265540",
+        "uid": "3b3acde0-73d1-40b8-b66a-69147e769361"
+      },
+      "spec": {
+        "containers": [
+          {
+            "env": [
+              {
+                "name": "MLU_REMOTE_BIND",
+                "value": "0.0.0.0"
+              },
+              {
+                "name": "MLU_REMOTE_PORT",
+                "value": "50051"
+              },
+              {
+                "name": "MLU_REMOTE_OBSERVATION_PORT",
+                "value": "50052"
+              }
+            ],
+            "image": "mlu-remote-server:arm64-observed-v4",
+            "imagePullPolicy": "Never",
+            "name": "server",
+            "ports": [
+              {
+                "containerPort": 50051,
+                "name": "remote",
+                "protocol": "TCP"
+              },
+              {
+                "containerPort": 50052,
+                "name": "observation",
+                "protocol": "TCP"
+              }
+            ],
+            "resources": {},
+            "securityContext": {
+              "privileged": true
+            },
+            "terminationMessagePath": "/dev/termination-log",
+            "terminationMessagePolicy": "File",
+            "volumeMounts": [
+              {
+                "mountPath": "/dev/cambricon_ctl",
+                "name": "cambricon-ctl"
+              },
+              {
+                "mountPath": "/dev/cambricon_dev0",
+                "name": "cambricon-dev0"
+              },
+              {
+                "mountPath": "/dev/cambricon_gdr",
+                "name": "cambricon-gdr"
+              },
+              {
+                "mountPath": "/dev/cambricon_ipcm0",
+                "name": "cambricon-ipcm0"
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-b9pbb",
+                "readOnly": true
+              }
+            ]
+          }
+        ],
+        "dnsPolicy": "ClusterFirst",
+        "enableServiceLinks": true,
+        "nodeName": "server310p",
+        "nodeSelector": {
+          "kubernetes.io/arch": "arm64"
+        },
+        "preemptionPolicy": "PreemptLowerPriority",
+        "priority": 0,
+        "restartPolicy": "Always",
+        "schedulerName": "default-scheduler",
+        "securityContext": {},
+        "serviceAccount": "default",
+        "serviceAccountName": "default",
+        "terminationGracePeriodSeconds": 30,
+        "tolerations": [
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/not-ready",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          },
+          {
+            "effect": "NoExecute",
+            "key": "node.kubernetes.io/unreachable",
+            "operator": "Exists",
+            "tolerationSeconds": 300
+          }
+        ],
+        "volumes": [
+          {
+            "hostPath": {
+              "path": "/dev/cambricon_ctl",
+              "type": "CharDevice"
+            },
+            "name": "cambricon-ctl"
+          },
+          {
+            "hostPath": {
+              "path": "/dev/cambricon_dev0",
+              "type": "CharDevice"
+            },
+            "name": "cambricon-dev0"
+          },
+          {
+            "hostPath": {
+              "path": "/dev/cambricon_gdr",
+              "type": "CharDevice"
+            },
+            "name": "cambricon-gdr"
+          },
+          {
+            "hostPath": {
+              "path": "/dev/cambricon_ipcm0",
+              "type": "CharDevice"
+            },
+            "name": "cambricon-ipcm0"
+          },
+          {
+            "name": "kube-api-access-b9pbb",
+            "projected": {
+              "defaultMode": 420,
+              "sources": [
+                {
+                  "serviceAccountToken": {
+                    "expirationSeconds": 3607,
+                    "path": "token"
+                  }
+                },
+                {
+                  "configMap": {
+                    "items": [
+                      {
+                        "key": "ca.crt",
+                        "path": "ca.crt"
+                      }
+                    ],
+                    "name": "kube-root-ca.crt"
+                  }
+                },
+                {
+                  "downwardAPI": {
+                    "items": [
+                      {
+                        "fieldRef": {
+                          "apiVersion": "v1",
+                          "fieldPath": "metadata.namespace"
+                        },
+                        "path": "namespace"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "status": {
+        "conditions": [
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:42:35Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodReadyToStartContainers"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:42:35Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Initialized"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:42:36Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "Ready"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:42:36Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "ContainersReady"
+          },
+          {
+            "lastProbeTime": null,
+            "lastTransitionTime": "2026-11-19T09:42:35Z",
+            "observedGeneration": 1,
+            "status": "True",
+            "type": "PodScheduled"
+          }
+        ],
+        "containerStatuses": [
+          {
+            "containerID": "containerd://9dca5598368b2d8f573dd9265a7a22e25cb1f3dfc11a4eec7a086c538cfe17b4",
+            "image": "docker.io/library/mlu-remote-server:arm64-observed-v4",
+            "imageID": "sha256:0e32f6cb2e45eac386e4cec525aa9c167ba61fd752c58ec3144543114890fa2a",
+            "lastState": {},
+            "name": "server",
+            "ready": true,
+            "resources": {},
+            "restartCount": 0,
+            "started": true,
+            "state": {
+              "running": {
+                "startedAt": "2026-11-19T09:42:36Z"
+              }
+            },
+            "user": {
+              "linux": {
+                "gid": 0,
+                "supplementalGroups": [
+                  0
+                ],
+                "uid": 0
+              }
+            },
+            "volumeMounts": [
+              {
+                "mountPath": "/dev/cambricon_ctl",
+                "name": "cambricon-ctl"
+              },
+              {
+                "mountPath": "/dev/cambricon_dev0",
+                "name": "cambricon-dev0"
+              },
+              {
+                "mountPath": "/dev/cambricon_gdr",
+                "name": "cambricon-gdr"
+              },
+              {
+                "mountPath": "/dev/cambricon_ipcm0",
+                "name": "cambricon-ipcm0"
+              },
+              {
+                "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                "name": "kube-api-access-b9pbb",
+                "readOnly": true,
+                "recursiveReadOnly": "Disabled"
+              }
+            ]
+          }
+        ],
+        "hostIP": "192.168.31.244",
+        "hostIPs": [
+          {
+            "ip": "192.168.31.244"
+          }
+        ],
+        "observedGeneration": 1,
+        "phase": "Running",
+        "podIP": "10.42.0.96",
+        "podIPs": [
+          {
+            "ip": "10.42.0.96"
+          }
+        ],
+        "qosClass": "BestEffort",
+        "resources": {},
+        "startTime": "2026-11-19T09:42:35Z"
+      }
+    }
+  ]
+}

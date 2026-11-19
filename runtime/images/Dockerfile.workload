@@ -1,0 +1,6 @@
+FROM ubuntu:22.04
+COPY bin/ /opt/workload/
+WORKDIR /opt/workload
+USER 65532:65532
+# Remote libraries are injected by the init container; no devices are exposed.
+CMD ["/bin/sh"]

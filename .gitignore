@@ -2,3 +2,4 @@
 /dist/
 /cover.out
 /examples/cricket-e2e/runtime/bin/
+__pycache__/

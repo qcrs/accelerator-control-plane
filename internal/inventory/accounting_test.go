@@ -209,3 +209,33 @@ func TestLocalLeaseResourceSnapshotSurvivesPoolDeletionAndRelease(t *testing.T) 
 		t.Fatalf("released reservation still consumes %d units", got)
 	}
 }
+
+// Restartable init containers overlap subsequent init stages and the application.
+func TestRestartableInitResourceAccounting(t *testing.T) {
+	always := corev1.ContainerRestartPolicyAlways
+	container := func(q string, sidecar bool) corev1.Container {
+		c := corev1.Container{Resources: corev1.ResourceRequirements{Requests: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse(q)}}}
+		if sidecar {
+			c.RestartPolicy = &always
+		}
+		return c
+	}
+	for _, tc := range []struct {
+		name string
+		init []corev1.Container
+		want string
+	}{
+		{"application overlaps sidecars", []corev1.Container{container("200m", true), container("300m", true)}, "1600m"},
+		{"init overlaps earlier sidecar", []corev1.Container{container("500m", true), container("2", false)}, "2600m"},
+		{"later sidecar does not overlap earlier init", []corev1.Container{container("2", false), container("500m", true)}, "2100m"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := &corev1.Pod{Spec: corev1.PodSpec{Containers: []corev1.Container{container("1", false)}, InitContainers: tc.init, Overhead: corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("100m")}}}
+			got := podRequestQuantity(pod, corev1.ResourceCPU)
+			want := resource.MustParse(tc.want)
+			if got.Cmp(want) != 0 {
+				t.Fatalf("got %s want %s", got.String(), want.String())
+			}
+		})
+	}
+}

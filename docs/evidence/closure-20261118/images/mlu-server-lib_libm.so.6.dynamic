@@ -1,0 +1,32 @@
+
+Dynamic section at offset 0x85d78 contains 29 entries:
+  Tag        Type                         Name/Value
+ 0x0000000000000001 (NEEDED)             Shared library: [libc.so.6]
+ 0x0000000000000001 (NEEDED)             Shared library: [ld-linux-aarch64.so.1]
+ 0x000000000000000e (SONAME)             Library soname: [libm.so.6]
+ 0x000000000000000c (INIT)               0xc960
+ 0x000000000000000d (FINI)               0x54190
+ 0x0000000000000019 (INIT_ARRAY)         0x95d68
+ 0x000000000000001b (INIT_ARRAYSZ)       8 (bytes)
+ 0x000000000000001a (FINI_ARRAY)         0x95d70
+ 0x000000000000001c (FINI_ARRAYSZ)       8 (bytes)
+ 0x0000000000000004 (HASH)               0x83198
+ 0x000000006ffffef5 (GNU_HASH)           0x210
+ 0x0000000000000005 (STRTAB)             0x9620
+ 0x0000000000000006 (SYMTAB)             0x27c8
+ 0x000000000000000a (STRSZ)              9668 (bytes)
+ 0x000000000000000b (SYMENT)             24 (bytes)
+ 0x0000000000000003 (PLTGOT)             0x95fe8
+ 0x0000000000000002 (PLTRELSZ)           264 (bytes)
+ 0x0000000000000014 (PLTREL)             RELA
+ 0x0000000000000017 (JMPREL)             0xc858
+ 0x0000000000000007 (RELA)               0xc708
+ 0x0000000000000008 (RELASZ)             336 (bytes)
+ 0x0000000000000009 (RELAENT)            24 (bytes)
+ 0x000000006ffffffc (VERDEF)             0xc518
+ 0x000000006ffffffd (VERDEFNUM)          12
+ 0x000000006ffffffe (VERNEED)            0xc6b8
+ 0x000000006fffffff (VERNEEDNUM)         2
+ 0x000000006ffffff0 (VERSYM)             0xbbe4
+ 0x000000006ffffff9 (RELACOUNT)          4
+ 0x0000000000000000 (NULL)               0x0

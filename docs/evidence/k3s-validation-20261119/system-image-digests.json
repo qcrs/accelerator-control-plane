@@ -1,0 +1,30 @@
+[
+  {
+    "pod": "accelerator-manager-cff5f94d7-7llc2",
+    "tag": "accelerator-control-plane:arm64-logic-20261119",
+    "expectedConfigDigest": "sha256:a9b0dee222150a29844cd086af0425d03e5a61e865e2ccd3cf3d378e1387cb84",
+    "actualRuntimeConfigDigest": "sha256:a9b0dee222150a29844cd086af0425d03e5a61e865e2ccd3cf3d378e1387cb84",
+    "match": true
+  },
+  {
+    "pod": "accelerator-manager-cff5f94d7-t5vbp",
+    "tag": "accelerator-control-plane:arm64-logic-20261119",
+    "expectedConfigDigest": "sha256:a9b0dee222150a29844cd086af0425d03e5a61e865e2ccd3cf3d378e1387cb84",
+    "actualRuntimeConfigDigest": "sha256:a9b0dee222150a29844cd086af0425d03e5a61e865e2ccd3cf3d378e1387cb84",
+    "match": true
+  },
+  {
+    "pod": "corex-remote-server-0",
+    "tag": "corex-remote-server:arm64-observed-v1",
+    "expectedConfigDigest": "sha256:a75dc6010d63b5723e3758ecb907dddf7a31e47fcfb8e3deab936450d99e2a30",
+    "actualRuntimeConfigDigest": "sha256:a75dc6010d63b5723e3758ecb907dddf7a31e47fcfb8e3deab936450d99e2a30",
+    "match": true
+  },
+  {
+    "pod": "mlu-remote-server-d6cf5544-mtb7s",
+    "tag": "mlu-remote-server:arm64-observed-v1",
+    "expectedConfigDigest": "sha256:cede839698ab6ac5109525e65f23dc2210dd98d5d8d7bf00ece7f402f7d9b6f3",
+    "actualRuntimeConfigDigest": "sha256:cede839698ab6ac5109525e65f23dc2210dd98d5d8d7bf00ece7f402f7d9b6f3",
+    "match": true
+  }
+]

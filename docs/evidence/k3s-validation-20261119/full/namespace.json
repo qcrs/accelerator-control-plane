@@ -1,0 +1,21 @@
+{
+  "apiVersion": "v1",
+  "kind": "Namespace",
+  "metadata": {
+    "creationTimestamp": "2026-11-19T05:03:59Z",
+    "labels": {
+      "kubernetes.io/metadata.name": "accelerator-validation-1119050357"
+    },
+    "name": "accelerator-validation-1119050357",
+    "resourceVersion": "247651",
+    "uid": "a2395f07-928d-4ac3-9575-0c515818cc7a"
+  },
+  "spec": {
+    "finalizers": [
+      "kubernetes"
+    ]
+  },
+  "status": {
+    "phase": "Active"
+  }
+}

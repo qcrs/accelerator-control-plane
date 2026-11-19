@@ -1,0 +1,25 @@
+{
+  "controlPlaneCleanupFix": {
+    "tests": [
+      "Provider deleted after failed rollback",
+      "Pool deleted after failed rollback"
+    ],
+    "fullGoVerification": "PASS",
+    "goRace": "PASS",
+    "image": "accelerator-control-plane:arm64-logic-20261119-v2",
+    "deployed": false
+  },
+  "mluDeliveryFix": {
+    "requiredArtifacts": [
+      "vector_add.fatbin",
+      "vector_add.manifest",
+      "libcnbin.so and native dependencies"
+    ],
+    "realServerImageKernel": "PASS",
+    "image": "mlu-remote-server:arm64-observed-v3",
+    "deployed": false
+  },
+  "logChannel": "RECOVERED",
+  "gitPushed": false,
+  "gitCommitted": false
+}

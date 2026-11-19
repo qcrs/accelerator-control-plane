@@ -1,0 +1,422 @@
+{
+  "apiVersion": "v1",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T02:09:08Z",
+      "involvedObject": {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "kind": "AcceleratorLease",
+        "name": "corex-auto-95e14f46-lease-1",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236565",
+        "uid": "4cb45799-f7b0-4f29-bc3c-e0f1e6952f9b"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T02:09:08Z",
+      "message": "released accelerator capacity for pool corex-remote",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T02:09:08Z",
+        "name": "corex-auto-95e14f46-lease-1.18e9503cbfdd4e3f",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236568",
+        "uid": "0d01c51f-3e54-4c98-9c27-5815c8cb0a46"
+      },
+      "reason": "Released",
+      "reportingComponent": "accelerator-control-plane",
+      "reportingInstance": "",
+      "source": {
+        "component": "accelerator-control-plane"
+      },
+      "type": "Normal"
+    },
+    {
+      "action": "Binding",
+      "apiVersion": "v1",
+      "eventTime": "2026-11-19T02:09:04.876630Z",
+      "firstTimestamp": null,
+      "involvedObject": {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "name": "corex-auto-95e14f46",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236531",
+        "uid": "7e5029c0-ecfe-41e4-a45d-487e1c4f5d96"
+      },
+      "kind": "Event",
+      "lastTimestamp": null,
+      "message": "Successfully assigned accelerator-validation-1119020902/corex-auto-95e14f46 to server310p",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T02:09:04Z",
+        "name": "corex-auto-95e14f46.18e9503bf1f6f852",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236534",
+        "uid": "3a349060-52a4-48af-9da3-90eec55c87be"
+      },
+      "reason": "Scheduled",
+      "reportingComponent": "default-scheduler",
+      "reportingInstance": "default-scheduler-server310p",
+      "source": {},
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T02:09:05Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "fieldPath": "spec.initContainers{accelerator-runtime-setup}",
+        "kind": "Pod",
+        "name": "corex-auto-95e14f46",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236532",
+        "uid": "7e5029c0-ecfe-41e4-a45d-487e1c4f5d96"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T02:09:05Z",
+      "message": "Container image \"corex-remote-client:arm64-observed-v1\" already present on machine and can be accessed by the pod",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T02:09:05Z",
+        "name": "corex-auto-95e14f46.18e9503c0c5c8685",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236544",
+        "uid": "d19e8b6e-c353-498b-a179-f8e9033d1b34"
+      },
+      "reason": "Pulled",
+      "reportingComponent": "kubelet",
+      "reportingInstance": "server310p",
+      "source": {
+        "component": "kubelet",
+        "host": "server310p"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T02:09:05Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "fieldPath": "spec.initContainers{accelerator-runtime-setup}",
+        "kind": "Pod",
+        "name": "corex-auto-95e14f46",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236532",
+        "uid": "7e5029c0-ecfe-41e4-a45d-487e1c4f5d96"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T02:09:05Z",
+      "message": "Container created",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T02:09:05Z",
+        "name": "corex-auto-95e14f46.18e9503c0ce0665c",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236546",
+        "uid": "1d076b45-7904-4c5c-91ae-46d81daea79e"
+      },
+      "reason": "Created",
+      "reportingComponent": "kubelet",
+      "reportingInstance": "server310p",
+      "source": {
+        "component": "kubelet",
+        "host": "server310p"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T02:09:05Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "fieldPath": "spec.initContainers{accelerator-runtime-setup}",
+        "kind": "Pod",
+        "name": "corex-auto-95e14f46",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236532",
+        "uid": "7e5029c0-ecfe-41e4-a45d-487e1c4f5d96"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T02:09:05Z",
+      "message": "Container started",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T02:09:05Z",
+        "name": "corex-auto-95e14f46.18e9503c0fad4171",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236547",
+        "uid": "dd26f271-abdb-41c9-8842-3f8a5fb3d797"
+      },
+      "reason": "Started",
+      "reportingComponent": "kubelet",
+      "reportingInstance": "server310p",
+      "source": {
+        "component": "kubelet",
+        "host": "server310p"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T02:09:06Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "fieldPath": "spec.containers{worker}",
+        "kind": "Pod",
+        "name": "corex-auto-95e14f46",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236532",
+        "uid": "7e5029c0-ecfe-41e4-a45d-487e1c4f5d96"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T02:09:06Z",
+      "message": "Container image \"corex-workload:arm64-observed-v1\" already present on machine and can be accessed by the pod",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T02:09:06Z",
+        "name": "corex-auto-95e14f46.18e9503c3ac8966b",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236549",
+        "uid": "ddffaf18-eec6-44f7-8e7a-c266c90544a9"
+      },
+      "reason": "Pulled",
+      "reportingComponent": "kubelet",
+      "reportingInstance": "server310p",
+      "source": {
+        "component": "kubelet",
+        "host": "server310p"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T02:09:06Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "fieldPath": "spec.containers{worker}",
+        "kind": "Pod",
+        "name": "corex-auto-95e14f46",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236532",
+        "uid": "7e5029c0-ecfe-41e4-a45d-487e1c4f5d96"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T02:09:06Z",
+      "message": "Container created",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T02:09:06Z",
+        "name": "corex-auto-95e14f46.18e9503c3b5190a5",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236551",
+        "uid": "682fbad5-5874-4f64-8f34-061b8ba0f4c4"
+      },
+      "reason": "Created",
+      "reportingComponent": "kubelet",
+      "reportingInstance": "server310p",
+      "source": {
+        "component": "kubelet",
+        "host": "server310p"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T02:09:06Z",
+      "involvedObject": {
+        "apiVersion": "v1",
+        "fieldPath": "spec.containers{worker}",
+        "kind": "Pod",
+        "name": "corex-auto-95e14f46",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236532",
+        "uid": "7e5029c0-ecfe-41e4-a45d-487e1c4f5d96"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T02:09:06Z",
+      "message": "Container started",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T02:09:06Z",
+        "name": "corex-auto-95e14f46.18e9503c3e39278f",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236552",
+        "uid": "04380b05-7561-4d73-a020-e30c65393f58"
+      },
+      "reason": "Started",
+      "reportingComponent": "kubelet",
+      "reportingInstance": "server310p",
+      "source": {
+        "component": "kubelet",
+        "host": "server310p"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 2,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T02:09:04Z",
+      "involvedObject": {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "kind": "AcceleratorWorkload",
+        "name": "corex-auto",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236522",
+        "uid": "95e14f46-0de8-49ce-837e-fb7f336452e9"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T02:09:04Z",
+      "message": "attempt 1 selected Remote mode using lease corex-auto-95e14f46-lease-1: selected 1 remote device(s) from endpoint corex-remote-server in pool corex-remote",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T02:09:04Z",
+        "name": "corex-auto.18e9503bee69df57",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236525",
+        "uid": "13edab2c-6e0b-42c2-8c82-4d422e556d8e"
+      },
+      "reason": "Selected",
+      "reportingComponent": "accelerator-control-plane",
+      "reportingInstance": "",
+      "source": {
+        "component": "accelerator-control-plane"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T02:09:04Z",
+      "involvedObject": {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "kind": "AcceleratorWorkload",
+        "name": "corex-auto",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236529",
+        "uid": "95e14f46-0de8-49ce-837e-fb7f336452e9"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T02:09:04Z",
+      "message": "lease corex-auto-95e14f46-lease-1 reserved 1 GPU device(s) in pool corex-remote",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T02:09:04Z",
+        "name": "corex-auto.18e9503bf156e186",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236530",
+        "uid": "819abd89-4939-4cdb-bebf-7881c8f14d75"
+      },
+      "reason": "Reserved",
+      "reportingComponent": "accelerator-control-plane",
+      "reportingInstance": "",
+      "source": {
+        "component": "accelerator-control-plane"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T02:09:04Z",
+      "involvedObject": {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "kind": "AcceleratorWorkload",
+        "name": "corex-auto",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236536",
+        "uid": "95e14f46-0de8-49ce-837e-fb7f336452e9"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T02:09:04Z",
+      "message": "created Pod corex-auto-95e14f46 for lease corex-auto-95e14f46-lease-1",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T02:09:04Z",
+        "name": "corex-auto.18e9503bf3052689",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236539",
+        "uid": "77fcd784-2bed-4ea6-8b8c-8d20d86df259"
+      },
+      "reason": "PodCreated",
+      "reportingComponent": "accelerator-control-plane",
+      "reportingInstance": "",
+      "source": {
+        "component": "accelerator-control-plane"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T02:09:04Z",
+      "involvedObject": {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "kind": "AcceleratorWorkload",
+        "name": "corex-auto",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236536",
+        "uid": "95e14f46-0de8-49ce-837e-fb7f336452e9"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T02:09:04Z",
+      "message": "bound lease corex-auto-95e14f46-lease-1 to Pod corex-auto-95e14f46",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T02:09:04Z",
+        "name": "corex-auto.18e9503bf30548f3",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236540",
+        "uid": "786eb683-6d52-41c1-bbf7-a33d36e92cfb"
+      },
+      "reason": "Bound",
+      "reportingComponent": "accelerator-control-plane",
+      "reportingInstance": "",
+      "source": {
+        "component": "accelerator-control-plane"
+      },
+      "type": "Normal"
+    },
+    {
+      "apiVersion": "v1",
+      "count": 1,
+      "eventTime": null,
+      "firstTimestamp": "2026-11-19T02:09:06Z",
+      "involvedObject": {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "kind": "AcceleratorWorkload",
+        "name": "corex-auto",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236554",
+        "uid": "95e14f46-0de8-49ce-837e-fb7f336452e9"
+      },
+      "kind": "Event",
+      "lastTimestamp": "2026-11-19T02:09:06Z",
+      "message": "Pod corex-auto-95e14f46 became Ready in Remote mode",
+      "metadata": {
+        "creationTimestamp": "2026-11-19T02:09:06Z",
+        "name": "corex-auto.18e9503c3fe2b0d8",
+        "namespace": "accelerator-validation-1119020902",
+        "resourceVersion": "236555",
+        "uid": "e4ecab86-8508-4e3b-b38a-36afd8000c00"
+      },
+      "reason": "Ready",
+      "reportingComponent": "accelerator-control-plane",
+      "reportingInstance": "",
+      "source": {
+        "component": "accelerator-control-plane"
+      },
+      "type": "Normal"
+    }
+  ],
+  "kind": "List",
+  "metadata": {
+    "resourceVersion": ""
+  }
+}

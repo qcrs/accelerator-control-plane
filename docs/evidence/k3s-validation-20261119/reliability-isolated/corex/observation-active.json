@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "driver": "corex-remote",
+  "healthy": true,
+  "capacity": 1,
+  "activeSessions": 1,
+  "cleanupErrors": 0
+}
