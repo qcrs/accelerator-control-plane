@@ -1,0 +1,10 @@
++08:00:00.000010 [34mINFO[0m:	connecting to host "192.168.5.6" port: 53773
++08:00:00.000245 [34mINFO[0m:	connecting via TCP...
++08:00:00.006783 [33mWARNING[0m: unknown format: 0x2	in [4mcpu-elf2.c:740[0m
+device count: err=0 count=1
+kernel launch: err=0
+kernel sync: err=0
+verification failures: 0
+sample: 1 2 256
++08:00:00.029601 [34mINFO[0m:	api-call-cnt: 8
++08:00:00.029618 [34mINFO[0m:	memcpy-cnt: 2048

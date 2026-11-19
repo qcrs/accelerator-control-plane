@@ -1,0 +1,32 @@
+evidence timestamp: 2026-08-20T17:16:16+08:00
+test scope: LocalOnly / RemoteOnly(mock) / Auto / filtering / stable selection
+=== RUN   TestLocalFirstSelect
+=== RUN   TestLocalFirstSelect/local_wins_over_higher_priority_remote
+=== RUN   TestLocalFirstSelect/remote_pool_aggregates_ordered_endpoints
+=== RUN   TestLocalFirstSelect/remote_pool_prefers_one_endpoint_when_it_fits
+=== RUN   TestLocalFirstSelect/exclusive_remote_endpoints_are_never_aggregated
+=== RUN   TestLocalFirstSelect/exclusive_endpoint_cannot_expose_unrequested_devices
+=== RUN   TestLocalFirstSelect/local_memory_must_be_known_and_sufficient
+=== RUN   TestLocalFirstSelect/local_vendor_must_be_known_when_requested
+=== RUN   TestLocalFirstSelect/unschedulable_when_capacity_is_short
+=== RUN   TestLocalFirstSelect/Auto_falls_back_to_remote_when_local_capacity_is_short
+=== RUN   TestLocalFirstSelect/LocalOnly_never_selects_remote_when_local_capacity_is_short
+=== RUN   TestLocalFirstSelect/RemoteOnly_ignores_an_eligible_local_candidate
+=== RUN   TestLocalFirstSelect/resource_form_and_profile_prevent_whole_device_and_MIG_units_from_mixing
+--- PASS: TestLocalFirstSelect (0.00s)
+    --- PASS: TestLocalFirstSelect/local_wins_over_higher_priority_remote (0.00s)
+    --- PASS: TestLocalFirstSelect/remote_pool_aggregates_ordered_endpoints (0.00s)
+    --- PASS: TestLocalFirstSelect/remote_pool_prefers_one_endpoint_when_it_fits (0.00s)
+    --- PASS: TestLocalFirstSelect/exclusive_remote_endpoints_are_never_aggregated (0.00s)
+    --- PASS: TestLocalFirstSelect/exclusive_endpoint_cannot_expose_unrequested_devices (0.00s)
+    --- PASS: TestLocalFirstSelect/local_memory_must_be_known_and_sufficient (0.00s)
+    --- PASS: TestLocalFirstSelect/local_vendor_must_be_known_when_requested (0.00s)
+    --- PASS: TestLocalFirstSelect/unschedulable_when_capacity_is_short (0.00s)
+    --- PASS: TestLocalFirstSelect/Auto_falls_back_to_remote_when_local_capacity_is_short (0.00s)
+    --- PASS: TestLocalFirstSelect/LocalOnly_never_selects_remote_when_local_capacity_is_short (0.00s)
+    --- PASS: TestLocalFirstSelect/RemoteOnly_ignores_an_eligible_local_candidate (0.00s)
+    --- PASS: TestLocalFirstSelect/resource_form_and_profile_prevent_whole_device_and_MIG_units_from_mixing (0.00s)
+=== RUN   TestLocalFirstRejectsDuplicateOrder
+--- PASS: TestLocalFirstRejectsDuplicateOrder (0.00s)
+PASS
+ok  	github.com/qcrs/accelerator-control-plane/internal/policy	0.005s

@@ -1,0 +1,6 @@
+evidence timestamp: 2026-08-20T17:16:59+08:00
+KUBEBUILDER_ASSETS=/home/qcrs/.local/share/kubebuilder-envtest/k8s/1.36.2-linux-amd64
+=== RUN   TestCRDsAndAtomicEndpointClaimsWithEnvtest
+--- PASS: TestCRDsAndAtomicEndpointClaimsWithEnvtest (11.76s)
+PASS
+ok  	github.com/qcrs/accelerator-control-plane/internal/controller	11.784s

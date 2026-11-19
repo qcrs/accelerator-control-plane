@@ -1,0 +1,20 @@
+evidence timestamp: 2026-08-20T17:19:14+08:00
+caller hostname: DESKTOP-OUOLT02
+caller user: qcrs
+remote endpoint: 192.168.5.6:53773
+
+[fixed TCP endpoints]
+Cricket TCP 53773: reachable
+SSH TCP 2222: reachable
+
+[remote identity and GPU]
+2026-08-20T17:19:16+08:00
+DESKTOP-SMJDB0V
+pc
+172.29.184.27 
+GPU 0: NVIDIA GeForce RTX 5060 Ti (UUID: GPU-759bebb9-5457-e2a1-099c-7430d065b190)
+nvcc: NVIDIA (R) Cuda compiler driver
+Copyright (c) 2005-2025 NVIDIA Corporation
+Built on Fri_Feb_21_20:23:50_PST_2025
+Cuda compilation tools, release 12.8, V12.8.93
+Build cuda_12.8.r12.8/compiler.35583870_0

@@ -1,0 +1,11 @@
+evidence timestamp: 2026-08-20T17:17:13+08:00
+control-chain evidence matrix (all entries come from this run's PASS logs)
+
+Accepted     PASS  Workload validation and reconcile lifecycle
+Selected     PASS  Local/Remote(mock)/Auto policy selection
+Reserved     PASS  Lease-key idempotent reservation
+RuntimeReady PASS  RuntimePlan generation for configured resource forms
+Released     PASS  Workload/Lease deletion releases simulated capacity
+
+Boundary: this matrix proves control-plane logic only.
+It does not prove that a container or a real remote GPU task ran.

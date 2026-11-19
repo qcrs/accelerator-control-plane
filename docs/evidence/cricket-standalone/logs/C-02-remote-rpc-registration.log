@@ -1,0 +1,24 @@
+evidence timestamp: 2026-08-20T17:19:14+08:00
+[remote processes]
+111 /sbin/rpcbind -f -w
+1494 sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups
+1995 /home/pc/src/cricket/bin/cricket-rpc-server 1
+2974 sshd: pc [priv]     
+3003 sshd: pc@notty      
+
+[remote RPC registry]
+   program vers proto   port  service
+    100000    4   tcp    111  portmapper
+    100000    3   tcp    111  portmapper
+    100000    2   tcp    111  portmapper
+    100000    4   udp    111  portmapper
+    100000    3   udp    111  portmapper
+    100000    2   udp    111  portmapper
+        99    1   tcp  51104
+
+[remote listening sockets]
+LISTEN 0      4096          0.0.0.0:51104      0.0.0.0:*    users:(("cricket-rpc-ser",pid=1995,fd=21))
+LISTEN 0      4096          0.0.0.0:111        0.0.0.0:*                                              
+LISTEN 0      128           0.0.0.0:22         0.0.0.0:*                                              
+LISTEN 0      4096             [::]:111           [::]:*                                              
+LISTEN 0      128              [::]:22            [::]:*                                              

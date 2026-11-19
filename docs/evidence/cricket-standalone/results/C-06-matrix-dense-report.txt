@@ -1,0 +1,15 @@
+demo=remote-dense-layer
+formula=Y=ReLU(X*W+bias)
+matrix_size=512
+seed=20260820
+remote_end_to_end_ms=200.032
+cpu_reference_ms=224.650
+gpu_hash=7489e7bed731fdf0
+cpu_hash=7489e7bed731fdf0
+mismatches=0
+max_absolute_difference=0
+verification=PASS
+sample_row_0=0,42,88,0
+sample_row_1=40,0,20,0
+sample_row_2=0,0,0,65
+sample_row_3=24,47,0,54

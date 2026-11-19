@@ -1,0 +1,18 @@
+evidence timestamp: 2026-08-20T17:17:12+08:00
+kubectl context: kind-cricket-e2e
+API readiness: ok
+
+[installed CRDs]
+NAME                                       CREATED AT
+acceleratorproviders.accelerator.qcrs.io   2026-07-24T02:41:09Z
+acceleratorpools.accelerator.qcrs.io       2026-07-24T02:41:08Z
+acceleratorworkloads.accelerator.qcrs.io   2026-07-24T02:41:36Z
+acceleratorleases.accelerator.qcrs.io      2026-07-24T02:41:08Z
+acceleratorendpoints.accelerator.qcrs.io   2026-07-24T02:41:07Z
+
+[server-side dry-run]
+acceleratorprovider.accelerator.qcrs.io/evidence-local-provider serverside-applied (server dry run)
+acceleratorpool.accelerator.qcrs.io/evidence-local-pool serverside-applied (server dry run)
+acceleratorworkload.accelerator.qcrs.io/evidence-plan-only serverside-applied (server dry run)
+
+No object was persisted by this command.

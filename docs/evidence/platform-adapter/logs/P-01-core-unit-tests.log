@@ -1,0 +1,103 @@
+evidence timestamp: 2026-08-20T17:15:13+08:00
+repository: /mnt/d/vGPU/accelerator-control-plane
+go version go1.26.5 linux/amd64
+
+[adapter registry]
+=== RUN   TestRegistryKeepsProviderAndAllocatorOnOneDriverBoundary
+--- PASS: TestRegistryKeepsProviderAndAllocatorOnOneDriverBoundary (0.00s)
+=== RUN   TestRegistryRejectsIncompleteDuplicateAndUnknownAdapters
+--- PASS: TestRegistryRejectsIncompleteDuplicateAndUnknownAdapters (0.00s)
+=== RUN   TestRegistryRejectsInvalidCapabilityDeclarations
+=== RUN   TestRegistryRejectsInvalidCapabilityDeclarations/empty
+=== RUN   TestRegistryRejectsInvalidCapabilityDeclarations/duplicate_resource_form
+=== RUN   TestRegistryRejectsInvalidCapabilityDeclarations/unknown_execution_mode
+--- PASS: TestRegistryRejectsInvalidCapabilityDeclarations (0.00s)
+    --- PASS: TestRegistryRejectsInvalidCapabilityDeclarations/empty (0.00s)
+    --- PASS: TestRegistryRejectsInvalidCapabilityDeclarations/duplicate_resource_form (0.00s)
+    --- PASS: TestRegistryRejectsInvalidCapabilityDeclarations/unknown_execution_mode (0.00s)
+PASS
+ok  	github.com/qcrs/accelerator-control-plane/internal/adapter	0.099s
+
+[inventory and capacity]
+=== RUN   TestLocalAccountingAvoidsBoundLeaseDoubleCount
+--- PASS: TestLocalAccountingAvoidsBoundLeaseDoubleCount (0.00s)
+=== RUN   TestLocalAccountingCountsReservationsAcrossPoolsSharingAResource
+--- PASS: TestLocalAccountingCountsReservationsAcrossPoolsSharingAResource (0.00s)
+=== RUN   TestOccupiedRemoteCapacityTracksExclusiveAndDeviceLeases
+--- PASS: TestOccupiedRemoteCapacityTracksExclusiveAndDeviceLeases (0.00s)
+=== RUN   TestNewLeaseConsumesCapacityBeforeStatusInitialization
+--- PASS: TestNewLeaseConsumesCapacityBeforeStatusInitialization (0.00s)
+=== RUN   TestNodeMatchesPodSchedulingConstraints
+--- PASS: TestNodeMatchesPodSchedulingConstraints (0.00s)
+=== RUN   TestQuantityAccountingPreservesScaleAndPodSchedulingSemantics
+--- PASS: TestQuantityAccountingPreservesScaleAndPodSchedulingSemantics (0.00s)
+=== RUN   TestLocalLeaseResourceSnapshotSurvivesPoolDeletionAndRelease
+--- PASS: TestLocalLeaseResourceSnapshotSurvivesPoolDeletionAndRelease (0.00s)
+=== RUN   TestSummarizeLocalPoolCapacityIncludesPodsAndUnboundLeases
+--- PASS: TestSummarizeLocalPoolCapacityIncludesPodsAndUnboundLeases (0.06s)
+=== RUN   TestSummarizeRemotePoolCapacityTracksExclusiveLease
+--- PASS: TestSummarizeRemotePoolCapacityTracksExclusiveLease (0.00s)
+=== RUN   TestPublishedConditionsMustMatchCurrentGeneration
+--- PASS: TestPublishedConditionsMustMatchCurrentGeneration (0.00s)
+=== RUN   TestKubernetesReaderNormalizesWholeMIGAndSharedLocalResources
+--- PASS: TestKubernetesReaderNormalizesWholeMIGAndSharedLocalResources (0.00s)
+PASS
+ok  	github.com/qcrs/accelerator-control-plane/internal/inventory	0.080s
+
+[pod mutation algorithm]
+=== RUN   TestMutateIsIdempotent
+--- PASS: TestMutateIsIdempotent (0.00s)
+=== RUN   TestMutateRejectsManagedEnvironmentConflict
+--- PASS: TestMutateRejectsManagedEnvironmentConflict (0.00s)
+=== RUN   TestMutateRejectsExistingPreloadConflict
+--- PASS: TestMutateRejectsExistingPreloadConflict (0.00s)
+=== RUN   TestMutateAddsLocalResourceAndNodeAffinity
+--- PASS: TestMutateAddsLocalResourceAndNodeAffinity (0.00s)
+=== RUN   TestMutateNarrowsExistingNodeAffinityToSelectedNode
+--- PASS: TestMutateNarrowsExistingNodeAffinityToSelectedNode (0.00s)
+=== RUN   TestMutateRejectsVolumeAndResourceConflicts
+=== RUN   TestMutateRejectsVolumeAndResourceConflicts/volume
+=== RUN   TestMutateRejectsVolumeAndResourceConflicts/resource
+--- PASS: TestMutateRejectsVolumeAndResourceConflicts (0.00s)
+    --- PASS: TestMutateRejectsVolumeAndResourceConflicts/volume (0.00s)
+    --- PASS: TestMutateRejectsVolumeAndResourceConflicts/resource (0.00s)
+PASS
+ok  	github.com/qcrs/accelerator-control-plane/internal/injector	0.007s
+
+[local allocator and state machine]
+=== RUN   TestLocalAllocatorIsIdempotentForLeaseKey
+--- PASS: TestLocalAllocatorIsIdempotentForLeaseKey (0.00s)
+=== RUN   TestLocalAllocatorRejectsMismatchedRequestAndTargetUnits
+--- PASS: TestLocalAllocatorRejectsMismatchedRequestAndTargetUnits (0.00s)
+=== RUN   TestAllocationTransitions
+--- PASS: TestAllocationTransitions (0.00s)
+=== RUN   TestIsExpiredOnlyBeforeBinding
+--- PASS: TestIsExpiredOnlyBeforeBinding (0.00s)
+PASS
+ok  	github.com/qcrs/accelerator-control-plane/internal/allocation	0.010s
+
+[local provider runtime plan]
+=== RUN   TestBuildRuntimePlanSupportsConfiguredLocalResourceForms
+=== RUN   TestBuildRuntimePlanSupportsConfiguredLocalResourceForms/whole_device
+=== RUN   TestBuildRuntimePlanSupportsConfiguredLocalResourceForms/MIG_instance
+=== RUN   TestBuildRuntimePlanSupportsConfiguredLocalResourceForms/software_share
+--- PASS: TestBuildRuntimePlanSupportsConfiguredLocalResourceForms (0.00s)
+    --- PASS: TestBuildRuntimePlanSupportsConfiguredLocalResourceForms/whole_device (0.00s)
+    --- PASS: TestBuildRuntimePlanSupportsConfiguredLocalResourceForms/MIG_instance (0.00s)
+    --- PASS: TestBuildRuntimePlanSupportsConfiguredLocalResourceForms/software_share (0.00s)
+=== RUN   TestDifferentLocalProviderDriversReuseConfiguredResourceSemantics
+--- PASS: TestDifferentLocalProviderDriversReuseConfiguredResourceSemantics (0.00s)
+=== RUN   TestBuildRuntimePlanRejectsRemoteLease
+--- PASS: TestBuildRuntimePlanRejectsRemoteLease (0.00s)
+=== RUN   TestValidateRejectsNonExtendedResourceNames
+=== RUN   TestValidateRejectsNonExtendedResourceNames/gpu
+=== RUN   TestValidateRejectsNonExtendedResourceNames/kubernetes.io/gpu
+=== RUN   TestValidateRejectsNonExtendedResourceNames/vendor.kubernetes.io/gpu
+=== RUN   TestValidateRejectsNonExtendedResourceNames/bad_resource/gpu
+--- PASS: TestValidateRejectsNonExtendedResourceNames (0.00s)
+    --- PASS: TestValidateRejectsNonExtendedResourceNames/gpu (0.00s)
+    --- PASS: TestValidateRejectsNonExtendedResourceNames/kubernetes.io/gpu (0.00s)
+    --- PASS: TestValidateRejectsNonExtendedResourceNames/vendor.kubernetes.io/gpu (0.00s)
+    --- PASS: TestValidateRejectsNonExtendedResourceNames/bad_resource/gpu (0.00s)
+PASS
+ok  	github.com/qcrs/accelerator-control-plane/internal/provider/local	0.007s

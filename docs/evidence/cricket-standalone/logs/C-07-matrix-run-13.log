@@ -1,0 +1,51 @@
+caller: qcrs@DESKTOP-OUOLT02
+REMOTE_GPU_ADDRESS=192.168.5.6:53773
+CRICKET_RPCID=1
+program=/mnt/d/vGPU/accelerator-control-plane/docs/evidence/cricket-standalone/bin/cricket-matrix-dense
+workload: Y = ReLU(X x W + bias), matrices are 512x512
+local seed=20260820
++08:00:00.000014 [34mINFO[0m:	connecting to host "192.168.5.6" port: 53773
++08:00:00.000327 [34mINFO[0m:	connecting via TCP...
++08:00:00.008772 [33mWARNING[0m: unknown format: 0x2	in [4mcpu-elf2.c:740[0m
++08:00:00.008790 [33mWARNING[0m: unknown format: 0x2	in [4mcpu-elf2.c:740[0m
++08:00:00.008794 [33mWARNING[0m: unknown format: 0x2	in [4mcpu-elf2.c:740[0m
+demo marker: remote-dense-layer
+formula: Y = ReLU(X x W + bias)
+injected remote address: 192.168.5.6:53773
+matrix dimensions: X=512x512 W=512x512 Y=512x512
+local input seed: 20260820
+multiply-accumulate count: 134217728
+local X checksum: 93f911d5c4ce0d56
+local W checksum: 6e2e91ef6c186f47
+X top-left 4x4:
+  [    -3,     0,     0,     3]
+  [     0,    -3,    -2,    -2]
+  [     0,     2,    -1,     1]
+  [     0,     0,     2,    -3]
+W top-left 4x4:
+  [     1,     2,     1,     0]
+  [    -2,    -2,     1,     1]
+  [     0,     0,     2,    -1]
+  [     1,    -2,    -1,     0]
+device count: 1
+kernel stages: tiled_matmul -> add_bias_relu
+H2D bytes: 2099200
+D2H bytes: 1048576
+Cricket remote end-to-end ms: 207.570
+local CPU reference ms: 217.516
+GPU result checksum: 7489e7bed731fdf0
+CPU result checksum: 7489e7bed731fdf0
+positive outputs: 130006 / 262144
+mismatched elements: 0 / 262144
+maximum absolute difference: 0
+Y top-left 4x4:
+  [     0,    42,    88,     0]
+  [    40,     0,    20,     0]
+  [     0,     0,     0,    65]
+  [    24,    47,     0,    54]
+verification: PASS
++08:00:00.500734 [34mINFO[0m:	api-call-cnt: 20
++08:00:00.500754 [34mINFO[0m:	memcpy-cnt: 3147776
+exit=0
+report=/mnt/d/vGPU/accelerator-control-plane/docs/evidence/cricket-standalone/results/C-06-matrix-dense-report.txt
+6a73e758a96c765485ab7e4055fbec29aeb8156ed94ccd5be1d7097936061b12  /mnt/d/vGPU/accelerator-control-plane/docs/evidence/cricket-standalone/results/C-06-matrix-dense-report.txt

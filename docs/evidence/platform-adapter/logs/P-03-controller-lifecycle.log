@@ -1,0 +1,10 @@
+evidence timestamp: 2026-08-20T17:16:18+08:00
+test scope: fake-client lifecycle, idempotent restore, controller reconstruction
+=== RUN   TestFallbackStateSurvivesControllerReconstruction
+--- PASS: TestFallbackStateSurvivesControllerReconstruction (0.12s)
+=== RUN   TestWorkloadReconcilerRestoresAnExistingPodIdempotently
+--- PASS: TestWorkloadReconcilerRestoresAnExistingPodIdempotently (0.03s)
+=== RUN   TestWorkloadReconcilerLocalLifecycle
+--- PASS: TestWorkloadReconcilerLocalLifecycle (0.04s)
+PASS
+ok  	github.com/qcrs/accelerator-control-plane/internal/controller	0.215s

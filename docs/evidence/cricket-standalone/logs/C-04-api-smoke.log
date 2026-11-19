@@ -1,0 +1,12 @@
+evidence timestamp: 2026-08-20T17:19:15+08:00
+command: LD_PRELOAD=cricket-client.so REMOTE_GPU_ADDRESS=192.168.5.6:53773 cricket-smoke
++08:00:00.000010 [34mINFO[0m:	connecting to host "192.168.5.6" port: 53773
++08:00:00.000207 [34mINFO[0m:	connecting via TCP...
++08:00:00.008773 [33mWARNING[0m: could not find .nv.info section. This means this binary does not contain any kernels.	in [4mcpu-elf2.c:923[0m
+cudaGetDeviceCount: err=0 count=1
+cudaMalloc: err=0 ptr=0x507800000
+cudaMemset: err=0
+cudaFree: err=0
++08:00:00.026266 [34mINFO[0m:	api-call-cnt: 4
++08:00:00.026283 [34mINFO[0m:	memcpy-cnt: 0
+exit=0

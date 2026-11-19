@@ -1,0 +1,45 @@
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorProvider
+metadata:
+  name: evidence-local-provider
+spec:
+  driver: kubernetes-device-plugin
+  deviceKinds:
+    - GPU
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorPool
+metadata:
+  name: evidence-local-pool
+spec:
+  providerRef:
+    name: evidence-local-provider
+  location: Local
+  deviceType: GPU
+  priority: 100
+  local:
+    resourceName: example.com/synthetic-gpu
+    resourceForm: WholeDevice
+    nodeSelector:
+      accelerator.qcrs.io/evidence-node: "true"
+---
+apiVersion: accelerator.qcrs.io/v1alpha1
+kind: AcceleratorWorkload
+metadata:
+  name: evidence-plan-only
+  namespace: default
+spec:
+  accelerator:
+    deviceType: GPU
+    count: 1
+    containerName: worker
+  placement:
+    mode: LocalOnly
+    reservationTTL: 5m
+  podTemplate:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: worker
+          image: example.invalid/not-executed:evidence
+          command: ["/bin/sh", "-c", "echo schema-only"]

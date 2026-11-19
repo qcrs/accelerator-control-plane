@@ -1,0 +1,22 @@
+evidence timestamp: 2026-08-20T17:16:56+08:00
+test scope: capacity conflict, mode boundary, endpoint claim, release
+=== RUN   TestPrePodCapacityConflictFallsBackAcrossModes
+--- PASS: TestPrePodCapacityConflictFallsBackAcrossModes (0.11s)
+=== RUN   TestTwoRemoteWorkloadsCannotAcquireSameEndpointWithStaleInventory
+--- PASS: TestTwoRemoteWorkloadsCannotAcquireSameEndpointWithStaleInventory (0.05s)
+=== RUN   TestWorkloadAndLeaseDeletionReleaseRemoteCapacity
+=== RUN   TestWorkloadAndLeaseDeletionReleaseRemoteCapacity/Workload_deletion
+=== RUN   TestWorkloadAndLeaseDeletionReleaseRemoteCapacity/configuration_deletion_before_reservation
+=== RUN   TestWorkloadAndLeaseDeletionReleaseRemoteCapacity/configuration_deletion_before_Pod_creation
+=== RUN   TestWorkloadAndLeaseDeletionReleaseRemoteCapacity/Workload_deletion_after_configuration_deletion
+=== RUN   TestWorkloadAndLeaseDeletionReleaseRemoteCapacity/Lease_deletion
+--- PASS: TestWorkloadAndLeaseDeletionReleaseRemoteCapacity (0.17s)
+    --- PASS: TestWorkloadAndLeaseDeletionReleaseRemoteCapacity/Workload_deletion (0.05s)
+    --- PASS: TestWorkloadAndLeaseDeletionReleaseRemoteCapacity/configuration_deletion_before_reservation (0.02s)
+    --- PASS: TestWorkloadAndLeaseDeletionReleaseRemoteCapacity/configuration_deletion_before_Pod_creation (0.03s)
+    --- PASS: TestWorkloadAndLeaseDeletionReleaseRemoteCapacity/Workload_deletion_after_configuration_deletion (0.04s)
+    --- PASS: TestWorkloadAndLeaseDeletionReleaseRemoteCapacity/Lease_deletion (0.04s)
+=== RUN   TestRuntimePlanModeBoundaryRejectsMixedResources
+--- PASS: TestRuntimePlanModeBoundaryRejectsMixedResources (0.00s)
+PASS
+ok  	github.com/qcrs/accelerator-control-plane/internal/controller	0.356s

@@ -1,0 +1,16 @@
++08:00:00.000007 [34mINFO[0m:	connecting to host "192.168.5.6" port: 53773
++08:00:00.000195 [34mINFO[0m:	connecting via TCP...
++08:00:00.006463 [33mWARNING[0m: unknown format: 0x2	in [4mcpu-elf2.c:740[0m
++08:00:00.006480 [33mWARNING[0m: unknown format: 0x2	in [4mcpu-elf2.c:740[0m
++08:00:00.006483 [33mWARNING[0m: unknown format: 0x2	in [4mcpu-elf2.c:740[0m
++08:00:00.006485 [33mWARNING[0m: unknown format: 0x2	in [4mcpu-elf2.c:740[0m
+demo marker: image-pipeline
+injected remote address: 192.168.5.6:53773
+input: RGBA 1024x768, stages: grayscale -> gaussian3x3 -> sobel -> histogram
+device count: 1
+pipeline wall time ms: 199.524
+edge checksum: 95577500
+histogram total: 786432
+verification failures: 0
++08:00:00.346642 [34mINFO[0m:	api-call-cnt: 24
++08:00:00.346673 [34mINFO[0m:	memcpy-cnt: 3933184

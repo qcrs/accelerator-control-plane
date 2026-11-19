@@ -1,0 +1,13 @@
+evidence timestamp: 2026-08-20T17:19:15+08:00
+command: LD_PRELOAD=cricket-client.so REMOTE_GPU_ADDRESS=192.168.5.6:53773 cricket-kernel-smoke
++08:00:00.000009 [34mINFO[0m:	connecting to host "192.168.5.6" port: 53773
++08:00:00.000172 [34mINFO[0m:	connecting via TCP...
++08:00:00.006094 [33mWARNING[0m: unknown format: 0x2	in [4mcpu-elf2.c:740[0m
+device count: err=0 count=1
+kernel launch: err=0
+kernel sync: err=0
+verification failures: 0
+sample: 1 2 256
++08:00:00.032479 [34mINFO[0m:	api-call-cnt: 8
++08:00:00.032499 [34mINFO[0m:	memcpy-cnt: 2048
+exit=0

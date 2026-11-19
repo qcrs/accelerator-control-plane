@@ -1,0 +1,21 @@
+evidence timestamp: 2026-08-20T17:19:15+08:00
+command: LD_PRELOAD=cricket-client.so REMOTE_GPU_ADDRESS=192.168.5.6:53773 cricket-image-pipeline
++08:00:00.000006 [34mINFO[0m:	connecting to host "192.168.5.6" port: 53773
++08:00:00.000175 [34mINFO[0m:	connecting via TCP...
++08:00:00.006466 [33mWARNING[0m: unknown format: 0x2	in [4mcpu-elf2.c:740[0m
++08:00:00.006486 [33mWARNING[0m: unknown format: 0x2	in [4mcpu-elf2.c:740[0m
++08:00:00.006489 [33mWARNING[0m: unknown format: 0x2	in [4mcpu-elf2.c:740[0m
++08:00:00.006491 [33mWARNING[0m: unknown format: 0x2	in [4mcpu-elf2.c:740[0m
+demo marker: image-pipeline
+injected remote address: 192.168.5.6:53773
+input: RGBA 1024x768, stages: grayscale -> gaussian3x3 -> sobel -> histogram
+device count: 1
+pipeline wall time ms: 243.806
+edge checksum: 95577500
+histogram total: 786432
+verification failures: 0
++08:00:00.398788 [34mINFO[0m:	api-call-cnt: 24
++08:00:00.398807 [34mINFO[0m:	memcpy-cnt: 3933184
+exit=0
+output: /mnt/d/vGPU/accelerator-control-plane/docs/evidence/cricket-standalone/results/image-pipeline-edge.pgm
+4a370fe37b7866da21185338bdc3116bfd438d6183138f97a4380d32e8f6df10  /mnt/d/vGPU/accelerator-control-plane/docs/evidence/cricket-standalone/results/image-pipeline-edge.pgm

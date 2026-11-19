@@ -1,0 +1,25 @@
+evidence timestamp: 2026-08-20T17:19:13+08:00
+[deployed startup script]
+dc23b74a67bf00a343bac5ea25fb88230c6b8f680ab3a42081e5745aa98ec900  /mnt/c/cricket-remote/start-cricket.ps1
+
+[current WSL service state]
+172.29.184.27 
+111 /sbin/rpcbind -f -w
+1494 sshd: /usr/sbin/sshd -D [listener] 0 of 10-100 startups
+1995 /home/pc/src/cricket/bin/cricket-rpc-server 1
+2864 sshd: pc [priv]     
+2893 sshd: pc@notty      
+2894 bash -c hostname -I; pgrep -af 'sshd|rpcbind|cricket-rpc-server'; rpcinfo -p 127.0.0.1 | grep -E 'program|^[[:space:]]*99[[:space:]]+1[[:space:]]+tcp'
+   program vers proto   port  service
+        99    1   tcp  51104
+
+[Windows fixed portproxy state]
+
+侦听 ipv4:                 连接到 ipv4:
+
+地址            端口        地址            端口
+--------------- ----------  --------------- ----------
+192.168.5.6     53773       172.29.184.27   51104
+192.168.5.6     111         172.29.184.27   111
+192.168.5.6     2222        172.29.184.27   22
+
