@@ -1,0 +1,6 @@
+=== RUN   TestRejectedReservationSurvivesWorkloadStatusConflict
+    claim_conflict_cleanup_test.go:137: recovery repeated a rejected reservation instead of restoring its outcome: {ObservedGeneration:1 Phase:Reserving SelectedMode:Remote AllocationRef:rejected-status-conflict-rejected-lease-1 AllocationAttempt:1 PodRef:nil Decision:0x5969d9a18e80 Fallback:{FailedAttempts:0 ReadyObserved:false RequeueAt:<nil> StartupStartedAt:<nil> History:[]} Conditions:[{Type:Accepted Status:True ObservedGeneration:1 LastTransitionTime:1970-01-01 00:16:40 +0000 UTC Reason:Valid Message:workload specification is valid} {Type:Selected Status:True ObservedGeneration:1 LastTransitionTime:1970-01-01 00:16:40 +0000 UTC Reason:Selected Message:selected 1 remote device(s) from endpoint endpoint-a in pool remote} {Type:Reserved Status:True ObservedGeneration:1 LastTransitionTime:1970-01-01 00:16:40 +0000 UTC Reason:Reserved Message:accelerator capacity is reserved}]}
+--- FAIL: TestRejectedReservationSurvivesWorkloadStatusConflict (0.17s)
+FAIL
+FAIL	github.com/qcrs/accelerator-control-plane/internal/controller	0.203s
+FAIL

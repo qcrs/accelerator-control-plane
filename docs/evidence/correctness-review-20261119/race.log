@@ -1,0 +1,15 @@
+?   	github.com/qcrs/accelerator-control-plane/api/v1alpha1	[no test files]
+?   	github.com/qcrs/accelerator-control-plane/cmd/manager	[no test files]
+ok  	github.com/qcrs/accelerator-control-plane/internal/adapter	(cached)
+ok  	github.com/qcrs/accelerator-control-plane/internal/allocation	2.486s
+ok  	github.com/qcrs/accelerator-control-plane/internal/contracts	(cached)
+ok  	github.com/qcrs/accelerator-control-plane/internal/controller	17.164s
+ok  	github.com/qcrs/accelerator-control-plane/internal/injector	1.045s
+ok  	github.com/qcrs/accelerator-control-plane/internal/inventory	2.494s
+ok  	github.com/qcrs/accelerator-control-plane/internal/policy	(cached)
+?   	github.com/qcrs/accelerator-control-plane/internal/provider	[no test files]
+ok  	github.com/qcrs/accelerator-control-plane/internal/provider/corex	1.026s
+ok  	github.com/qcrs/accelerator-control-plane/internal/provider/cricket	(cached)
+ok  	github.com/qcrs/accelerator-control-plane/internal/provider/local	1.033s
+ok  	github.com/qcrs/accelerator-control-plane/internal/provider/mlu	1.028s
+ok  	github.com/qcrs/accelerator-control-plane/internal/provider/observation	(cached)

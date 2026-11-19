@@ -103,7 +103,7 @@ func startupStartedAt(workload *acceleratorv1alpha1.AcceleratorWorkload, pod *co
 }
 
 func detectStartupFailure(pod *corev1.Pod, startedAt, now time.Time, timeout time.Duration) (startupFailure, bool) {
-	if pod == nil {
+	if pod == nil || pod.Status.Phase == corev1.PodSucceeded {
 		return startupFailure{}, false
 	}
 	for _, condition := range pod.Status.Conditions {
@@ -131,6 +131,11 @@ func detectStartupFailure(pod *corev1.Pod, startedAt, now time.Time, timeout tim
 		if failure, found := waitingStartupFailure("init container", status.Name, status.State.Waiting); found {
 			return failure, true
 		}
+	}
+	// Managed runtime init failures above are retryable before Ready. A failed
+	// application is already terminal; elapsed time alone must not replay it.
+	if pod.Status.Phase == corev1.PodFailed {
+		return startupFailure{}, false
 	}
 	if timeout > 0 && !startedAt.IsZero() && !now.Before(startedAt.Add(timeout)) {
 		return startupFailure{

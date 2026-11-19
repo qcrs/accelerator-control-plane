@@ -374,6 +374,9 @@ func nodeMatchesPod(node *corev1.Node, podSpec *corev1.PodSpec) bool {
 }
 
 func nodeSelectorTermMatches(node *corev1.Node, term corev1.NodeSelectorTerm) bool {
+	if len(term.MatchExpressions) == 0 && len(term.MatchFields) == 0 {
+		return false
+	}
 	for _, requirement := range term.MatchExpressions {
 		if !selectorRequirementMatches(node.Labels[requirement.Key], hasKey(node.Labels, requirement.Key), requirement) {
 			return false

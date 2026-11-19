@@ -1,0 +1,32 @@
+=== RUN   TestClaimLoserCanFinishFallbackWithoutReleasingWinner
+--- PASS: TestClaimLoserCanFinishFallbackWithoutReleasingWinner (0.24s)
+=== RUN   TestCleanupStillChecksUncertainAndAcquiredClaimOwnership
+=== RUN   TestCleanupStillChecksUncertainAndAcquiredClaimOwnership/unconfirmed
+=== RUN   TestCleanupStillChecksUncertainAndAcquiredClaimOwnership/acquired
+--- PASS: TestCleanupStillChecksUncertainAndAcquiredClaimOwnership (0.09s)
+    --- PASS: TestCleanupStillChecksUncertainAndAcquiredClaimOwnership/unconfirmed (0.04s)
+    --- PASS: TestCleanupStillChecksUncertainAndAcquiredClaimOwnership/acquired (0.05s)
+=== RUN   TestCompletedPodBeforeReadyDoesNotFallback
+=== RUN   TestCompletedPodBeforeReadyDoesNotFallback/quick_local_success
+=== RUN   TestCompletedPodBeforeReadyDoesNotFallback/success_observed_after_startup_deadline
+=== RUN   TestCompletedPodBeforeReadyDoesNotFallback/remote_success_after_endpoint_outage
+=== RUN   TestCompletedPodBeforeReadyDoesNotFallback/application_failure_after_deadline_and_outage
+--- PASS: TestCompletedPodBeforeReadyDoesNotFallback (0.30s)
+    --- PASS: TestCompletedPodBeforeReadyDoesNotFallback/quick_local_success (0.07s)
+    --- PASS: TestCompletedPodBeforeReadyDoesNotFallback/success_observed_after_startup_deadline (0.07s)
+    --- PASS: TestCompletedPodBeforeReadyDoesNotFallback/remote_success_after_endpoint_outage (0.08s)
+    --- PASS: TestCompletedPodBeforeReadyDoesNotFallback/application_failure_after_deadline_and_outage (0.08s)
+=== RUN   TestFailedManagedRuntimeInitBeforeReadyStillFallsBack
+--- PASS: TestFailedManagedRuntimeInitBeforeReadyStillFallsBack (0.12s)
+PASS
+ok  	github.com/qcrs/accelerator-control-plane/internal/controller	0.791s
+=== RUN   TestEmptyNodeSelectorTermsMatchNoNodes
+--- PASS: TestEmptyNodeSelectorTermsMatchNoNodes (0.00s)
+=== RUN   TestSelectedNodeRemainsSchedulableAfterInjection
+--- PASS: TestSelectedNodeRemainsSchedulableAfterInjection (0.00s)
+PASS
+ok  	github.com/qcrs/accelerator-control-plane/internal/inventory	0.024s
+=== RUN   TestMutateDoesNotMakeEmptyRequiredAffinitySchedulable
+--- PASS: TestMutateDoesNotMakeEmptyRequiredAffinitySchedulable (0.00s)
+PASS
+ok  	github.com/qcrs/accelerator-control-plane/internal/injector	0.010s

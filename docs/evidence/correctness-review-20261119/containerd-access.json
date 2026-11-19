@@ -1,0 +1,5 @@
+{
+  "operation": "read-only containerd image list",
+  "exitCode": 1,
+  "stderr": "W1119 13:08:59.929950  754308 logging.go:55] [core] [Channel #1 SubChannel #2] grpc: addrConn.createTransport failed to connect to {Addr: \"/run/k3s/containerd/containerd.sock\", ServerName: \"localhost\", Attributes: {\"<%!p(networktype.keyType=grpc.internal.transport.networktype)>\": \"unix\" }, }. Err: connection error: desc = \"transport: Error while dialing: dial unix /run/k3s/containerd/containerd.sock: connect: permission denied\"\ntime=\"2026-11-19T13:08:59Z\" level=warning msg=\"Failed to check deprecations\" error=\"connection error: desc = \\\"transport: Error while dialing: dial unix /run/k3s/containerd/containerd.sock: connect: permission denied\\\"\"\nctr: failed to list images: connection error: desc = \"transport: Error while dialing: dial unix /run/k3s/containerd/containerd.sock: connect: permission denied\"\n"
+}

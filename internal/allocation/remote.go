@@ -15,6 +15,8 @@ import (
 // The atomic Claim protects ownership; AcceleratorLease stores its lifecycle.
 // The resolver and provider observation verify the target before materialization;
 // vendor wire protocols remain inside the Provider.
+// A non-transient Reserve rejection confirms no ownership remains for this
+// request. Unconfirmed acquisition or rollback is always ErrorKindTransient.
 type RemoteAllocator struct {
 	Resolver  contracts.EndpointResolver
 	Validator contracts.RemoteEndpointValidator

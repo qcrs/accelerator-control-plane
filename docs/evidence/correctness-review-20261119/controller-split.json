@@ -1,0 +1,101 @@
+{
+  "functionsMoved": 24,
+  "newFiles": {
+    "workload_selection.go": [
+      "selectAndCreateLease",
+      "restoreLeaseSelection",
+      "recordLeaseSelection"
+    ],
+    "workload_reservation.go": [
+      "reserveLease",
+      "failReservationConfiguration"
+    ],
+    "workload_pod.go": [
+      "ensurePod",
+      "failRuntimePreparation",
+      "isPermanentConfigurationError",
+      "isPermanentPodCreateError",
+      "podFromTemplate",
+      "objectReferenceForPod",
+      "podReady"
+    ],
+    "workload_status.go": [
+      "syncBoundPod",
+      "syncTerminalStatus",
+      "remoteTargetsHealthy",
+      "boundEndpoint",
+      "healthyDeviceExists",
+      "stringMapsEqual"
+    ],
+    "workload_release.go": [
+      "expireLease",
+      "finalizeDeletingLease",
+      "deleteActiveLeasePod",
+      "releaseLease",
+      "finalizeWorkload",
+      "listWorkloadLeases"
+    ]
+  },
+  "originalFunctionSHA256": {
+    "SetupWithManager": "e2921960c976d9a9536ad2cbb1ab7d25d732e9b966f56ad4ad718d1e04519475",
+    "Reconcile": "6bf7eedeeaf58f989386663e3078b86e8505fc1924b4c2117b899e850d7186fb",
+    "selectAndCreateLease": "ba45d9548254c0b9d73dfb0d8e95295725c4862f5530ec0c5e10f4d2c6eed5f6",
+    "restoreLeaseSelection": "c861b97c5de3a6da7c93550e3f9c468fcc7eda746284dcb8e89f9a70710e7377",
+    "recordLeaseSelection": "f797a9227f5186b111872bb0e21d11a141c6a22969ae24a69075034304f12f36",
+    "reserveLease": "faa5322207cc65d838b38ab76de60e5221f95ed7fd354e047089ba756c31726f",
+    "failReservationConfiguration": "7c4c708f0131f72b429ef6b262fdfd2440950aa27ce34ca44cf2b656d4c185c7",
+    "ensurePod": "fe0d94c310a7e444754e432f4139385d865ce825ab69b97a45e74e6828f42017",
+    "syncBoundPod": "7320f652f81edecbd70ec2462fdf95f612930027f99296d2c8114efe55f6d768",
+    "syncTerminalStatus": "ecc85b0099ae7f2808513874eb07a23abf04c9618fdf934ddf4e1d78989be43c",
+    "failRuntimePreparation": "36d0eaf2f969352c1fd6fd6b412d217eb5fc9add0b494dd384d3eb806b68b863",
+    "isPermanentConfigurationError": "eded1a3393c36c056da93c2ce6ea18bc3a31cfc4d2658063a74adef71349bb7e",
+    "isPermanentPodCreateError": "9a26c6bcf94acc3b00ea2da1f994aa2fa331c6a33e0985b6edb7f23fdd6286b7",
+    "expireLease": "83ad6d4f4b5d102a4ebcabddc96df150ea48780d56de038c3a27593db79ab432",
+    "finalizeDeletingLease": "97bcced0406568776d9567b71b0d988fb0ea61f79337d83816786ef5e2e42a41",
+    "deleteActiveLeasePod": "c46a5c0b43d866a9fe2d13f750b34fd67e00b53107f499543440e68d6be589f3",
+    "releaseLease": "b4eed00b375da6caf6ad21cf111b4cbd65d057ea10341ceee81346a3161a7bf7",
+    "finalizeWorkload": "e4021ba471eccdb45d30dc117e13875f687b61b55badc53d6adc7f8f730f2b5c",
+    "remoteTargetsHealthy": "21bb46295a0df0001a15f8534b91d24117acc8dc2af6e499f8d8a3d7a175a143",
+    "boundEndpoint": "27e26abeab15b3215b2bc118239f62814f90a839c7bfe74fa27a6861f9c9482c",
+    "healthyDeviceExists": "a5ddbf87dafd7be1c552ab8b655cb94998a5e1205575c2cf3b1bb7ae37c2afd7",
+    "stringMapsEqual": "0e3bc65025bedd192f81613feee337ec78a2d9f790725a06b41ba673cd213f31",
+    "resolveProvider": "bccd2d60d223899176a027e0b21f98695bc600eaa7ec014824384ffa5cbc976c",
+    "resolveExecution": "3fc7753c9a6424d2acb3a273e5a00c035b964cb149b0fdbe665171c2398c93a2",
+    "allocatorForActiveLease": "2a804f00812fd35786244cf91569dc0d101b31cccaf35be5e09afc351ceba86a",
+    "allocatorForRelease": "a04b05c80343daea154f34e4271c46a3b3325decfce43d97ab42a8f201f48f23",
+    "managedResources": "9f4b507778cadec4e9840ec8cef02eea87750fb9d14bde602b66a6741c491e46",
+    "updateWorkloadStatus": "122c2440b5276e2448b8f3b3c2158c8b6e5a2c6fc2ffbab719cb4153c38790d4",
+    "updateLeaseStatus": "d0b69145aed32a17a9d17414c2b6a7173b684b77eedddfc053e5d82e54ace524",
+    "removeLeaseFinalizer": "425718fc9195d3be51ade305f3f8034b41f22b33241089ff1b5faaac61ed89a1",
+    "validateDependencies": "5dbc7ea3ac807716569c9739488d684954fe888bb48e319e887cf0335a0d917f",
+    "stateReader": "b3b05d11c3878d9fb74f816931afefcd088a4b20b2f4aeca3da6363cfd2664b8",
+    "now": "e5ef66841f95119968d819a86e3e30a5b239c85f7c6dd57ee50521b37099f9bf",
+    "setCondition": "e51ec387aabdd5fdf7b9a456f473af23f6ad5b68a31d508ea49fe9ba7b5ea003",
+    "reservationRequest": "ed0799ba2da64712501508c0662277b29afd129d1c576d13cdbd48d71c50db7c",
+    "reservationRequestFromLease": "442b87261d4eaa3ec8b6561b4f607995584d91ce5cf565f6c19d3c8b9d350aca",
+    "podFromTemplate": "4109efc38cf6b5b8c63c493606a2f366639bef5d4407d6e062bec9497dd4f3fd",
+    "objectReferenceForPod": "2fd84fc3616d5d519d024f3b58525e6066f32cf6452e8b5ca78e23f9b08da8f4",
+    "podReady": "f787404dbb84889eea8f69434df79daf108650ff43cf4ec038c042ae40bbf3ff",
+    "workloadPhaseTerminal": "8468ae35cc0cea19e98f763d4c3b41d4a57498fb49ea5fbfbb546923280139f3",
+    "workloadIdentityLabels": "bb0456dda9a0d853a354ce6b7bf52022af3f69ea9c2a994ade5a563c3956d8ab",
+    "listWorkloadLeases": "de22fc8a255999e4c20a13a63ff6409644f7e2460058ef1a8d55dbd5d651b4f2",
+    "copyMap": "6381b15314f4bf6f48f6c5dea170602c36737fc8ad5c43e0b7636ed622b1982f",
+    "copyBoundEndpoints": "d7c498da71ac332817f0c0902a67e1553673f53b368a394f1f843c830cdcdfca",
+    "copyAllocationTargets": "16932a35a28052f5a4cdfaf8ffd35d5503daf578117318b66b459141028ab164"
+  },
+  "allFunctionBodiesIdentical": true,
+  "changedFunctions": [],
+  "extraFunctions": [],
+  "lineCounts": {
+    "workload_selection.go": 181,
+    "workload_controller.go": 444,
+    "workload_status.go": 253,
+    "workload_reservation.go": 142,
+    "workload_release.go": 253,
+    "workload_pod.go": 218
+  },
+  "comparisonScope": "Mechanical split checkpoint, before the additional reserveLease rejected-outcome restoration fix",
+  "laterFunctionalChanges": [
+    "reserveLease: restore a committed rejection after a Workload status conflict"
+  ]
+}

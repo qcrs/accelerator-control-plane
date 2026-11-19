@@ -1,0 +1,157 @@
+{
+  "observedAt": "2026-11-19T12:50:19.231162+00:00",
+  "mode": "read-only",
+  "endpointCount": 2,
+  "sameDriverCounts": {
+    "corex-remote": 1,
+    "mlu-remote": 1
+  },
+  "endpoints": [
+    {
+      "endpoint": "corex-remote-server",
+      "spec": {
+        "address": "corex-remote-server-0.corex-remote-server.accelerator-system.svc.cluster.local:50051",
+        "devices": [
+          {
+            "health": "Healthy",
+            "id": "gpu-0",
+            "memory": "16Gi",
+            "model": "MR-V100",
+            "resourceForm": "WholeDevice",
+            "vendor": "iluvatar"
+          }
+        ],
+        "parameters": {
+          "observationPort": "50052"
+        },
+        "poolRef": {
+          "name": "corex-remote"
+        },
+        "runtime": {
+          "apiVersion": "3",
+          "driver": "corex-remote",
+          "version": "corex-remote-arm64-4.4"
+        }
+      },
+      "health": "Healthy",
+      "sessions": 0,
+      "pods": [
+        {
+          "name": "corex-remote-server-0",
+          "node": "server310p",
+          "podIP": "10.42.0.119",
+          "images": [
+            "corex-remote-server:arm64-observed-v4"
+          ],
+          "hostPaths": [
+            "/dev/iluvatar0"
+          ]
+        }
+      ],
+      "service": [
+        {
+          "name": "corex-remote-server",
+          "clusterIP": "None",
+          "selector": {
+            "app.kubernetes.io/name": "corex-remote-server"
+          }
+        }
+      ],
+      "backends": [
+        {
+          "addresses": [
+            "10.42.0.119"
+          ],
+          "conditions": {
+            "ready": true,
+            "serving": true,
+            "terminating": false
+          },
+          "hostname": "corex-remote-server-0",
+          "nodeName": "server310p",
+          "targetRef": {
+            "kind": "Pod",
+            "name": "corex-remote-server-0",
+            "namespace": "accelerator-system",
+            "uid": "d17167e8-66b7-41f1-aee9-9bcefe9fd436"
+          }
+        }
+      ]
+    },
+    {
+      "endpoint": "mlu-remote-server",
+      "spec": {
+        "address": "mlu-remote-server.accelerator-system.svc:50051",
+        "devices": [
+          {
+            "health": "Healthy",
+            "id": "mlu-0",
+            "memory": "24Gi",
+            "model": "MLU370-S4",
+            "resourceForm": "WholeDevice",
+            "vendor": "cambricon"
+          }
+        ],
+        "parameters": {
+          "observationPort": "50052"
+        },
+        "poolRef": {
+          "name": "mlu-remote"
+        },
+        "runtime": {
+          "apiVersion": "1",
+          "driver": "mlu-remote",
+          "version": "mlu-remote-runtime-arm64-20261116"
+        }
+      },
+      "health": "Healthy",
+      "sessions": 0,
+      "pods": [
+        {
+          "name": "mlu-remote-server-579b7f5c9f-hnm79",
+          "node": "server310p",
+          "podIP": "10.42.0.114",
+          "images": [
+            "mlu-remote-server:arm64-observed-v4"
+          ],
+          "hostPaths": [
+            "/dev/cambricon_ctl",
+            "/dev/cambricon_dev0",
+            "/dev/cambricon_gdr",
+            "/dev/cambricon_ipcm0"
+          ]
+        }
+      ],
+      "service": [
+        {
+          "name": "mlu-remote-server",
+          "clusterIP": "10.43.233.38",
+          "selector": {
+            "app.kubernetes.io/name": "mlu-remote-server"
+          }
+        }
+      ],
+      "backends": [
+        {
+          "addresses": [
+            "10.42.0.114"
+          ],
+          "conditions": {
+            "ready": true,
+            "serving": true,
+            "terminating": false
+          },
+          "nodeName": "server310p",
+          "targetRef": {
+            "kind": "Pod",
+            "name": "mlu-remote-server-579b7f5c9f-hnm79",
+            "namespace": "accelerator-system",
+            "uid": "7c95126a-237a-4daf-8dd8-619bcf707b65"
+          }
+        }
+      ]
+    }
+  ],
+  "finding": "one CoreX GPU endpoint and one MLU NPU endpoint; no duplicate endpoint aliases or multiple same-driver server Pods observed",
+  "limit": "runtime-local device IDs are not physical UUIDs; this snapshot does not prove absence of clients or servers outside Kubernetes"
+}

@@ -1,0 +1,10 @@
+{
+  "result": "PASS",
+  "driver": "mlu",
+  "verifiedAt": "2026-11-19T13:17:42.543864+00:00",
+  "workloadUID": "ef115892-2a49-40ff-ac1a-3607c95cc9a6",
+  "podUID": "132a6e7a-22ba-4382-a8d1-003096441576",
+  "leaseUID": "eb0e665b-54a3-481d-873c-de49fe927fee",
+  "runtimeConfigDigestsMatched": true,
+  "localAcceleratorDevices": "NONE"
+}

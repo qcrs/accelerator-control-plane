@@ -12,7 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
-const hostnameLabel = "kubernetes.io/hostname"
+const nodeNameField = "metadata.name"
 
 type PodMutator struct{}
 
@@ -199,9 +199,6 @@ func requireNode(spec *corev1.PodSpec, nodeName string) error {
 	if spec.NodeName != "" && spec.NodeName != nodeName {
 		return conflict("spec.nodeName", spec.NodeName)
 	}
-	if selected, found := spec.NodeSelector[hostnameLabel]; found && selected != nodeName {
-		return conflict("node selector", hostnameLabel)
-	}
 	if spec.Affinity == nil {
 		spec.Affinity = &corev1.Affinity{}
 	}
@@ -212,27 +209,34 @@ func requireNode(spec *corev1.PodSpec, nodeName string) error {
 	if required == nil {
 		required = &corev1.NodeSelector{NodeSelectorTerms: []corev1.NodeSelectorTerm{{}}}
 		spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution = required
-	}
-	if len(required.NodeSelectorTerms) == 0 {
-		required.NodeSelectorTerms = []corev1.NodeSelectorTerm{{}}
+	} else {
+		// Empty required terms match no nodes. Do not turn them into an
+		// unconstrained OR branch when adding the selected node requirement.
+		terms := make([]corev1.NodeSelectorTerm, 0, len(required.NodeSelectorTerms))
+		for _, term := range required.NodeSelectorTerms {
+			if len(term.MatchExpressions) != 0 || len(term.MatchFields) != 0 {
+				terms = append(terms, term)
+			}
+		}
+		if len(terms) == 0 {
+			return conflict("node affinity", "required selector matches no nodes")
+		}
+		required.NodeSelectorTerms = terms
 	}
 	for index := range required.NodeSelectorTerms {
 		term := &required.NodeSelectorTerms[index]
-		if requirementExists(term.MatchExpressions, nodeName) {
-			continue
+		if !requirementExists(term.MatchFields, nodeName) {
+			term.MatchFields = append(term.MatchFields, corev1.NodeSelectorRequirement{
+				Key: nodeNameField, Operator: corev1.NodeSelectorOpIn, Values: []string{nodeName},
+			})
 		}
-		term.MatchExpressions = append(term.MatchExpressions, corev1.NodeSelectorRequirement{
-			Key:      hostnameLabel,
-			Operator: corev1.NodeSelectorOpIn,
-			Values:   []string{nodeName},
-		})
 	}
 	return nil
 }
 
 func requirementExists(requirements []corev1.NodeSelectorRequirement, nodeName string) bool {
 	for _, requirement := range requirements {
-		if requirement.Key == hostnameLabel &&
+		if requirement.Key == nodeNameField &&
 			requirement.Operator == corev1.NodeSelectorOpIn &&
 			len(requirement.Values) == 1 && requirement.Values[0] == nodeName {
 			return true

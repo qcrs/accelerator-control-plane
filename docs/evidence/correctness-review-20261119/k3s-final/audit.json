@@ -1,0 +1,81 @@
+{
+  "result": "PASS",
+  "auditedAt": "2026-11-19T13:24:23.143353+00:00",
+  "scenarios": 13,
+  "namespace": "accelerator-validation-1119131528",
+  "successfulNumericalWorkloads": [
+    "corex-auto",
+    "corex-clusterip",
+    "corex-compete-0",
+    "corex-compete-1",
+    "corex-controller-restart",
+    "corex-dns-recreated",
+    "corex-queued-outage",
+    "mlu-auto",
+    "mlu-compete-0",
+    "mlu-compete-1",
+    "mlu-queued-outage"
+  ],
+  "expectedPostReadyFailures": [
+    "corex-ready-outage",
+    "mlu-ready-outage"
+  ],
+  "confirmedRunningDeletions": [
+    "corex-delete",
+    "mlu-delete"
+  ],
+  "capturedPodCount": 15,
+  "allCapturedRuntimeConfigDigestsMatch": true,
+  "systemImages": [
+    {
+      "pod": "accelerator-manager-85f9684fdb-d5hhr",
+      "images": [
+        {
+          "image": "accelerator-control-plane:arm64-correctness-20261119-v2",
+          "configDigest": "sha256:068fcaae79f61ac9d3bbe0eb6827f6c9021c43d346cc5811d5e94cf2490064db"
+        }
+      ]
+    },
+    {
+      "pod": "accelerator-manager-85f9684fdb-rd85x",
+      "images": [
+        {
+          "image": "accelerator-control-plane:arm64-correctness-20261119-v2",
+          "configDigest": "sha256:068fcaae79f61ac9d3bbe0eb6827f6c9021c43d346cc5811d5e94cf2490064db"
+        }
+      ]
+    },
+    {
+      "pod": "corex-remote-server-0",
+      "images": [
+        {
+          "image": "corex-remote-server:arm64-observed-v4",
+          "configDigest": "sha256:e9995d45712ce7e917d404132d94284c2793cbf97cf9865318a6c84644e75878"
+        }
+      ]
+    },
+    {
+      "pod": "mlu-remote-server-579b7f5c9f-87jff",
+      "images": [
+        {
+          "image": "mlu-remote-server:arm64-observed-v4",
+          "configDigest": "sha256:0e32f6cb2e45eac386e4cec525aa9c167ba61fd752c58ec3144543114890fa2a"
+        }
+      ]
+    }
+  ],
+  "allPlatformTasksTerminal": true,
+  "endpointClaimsRemaining": 0,
+  "originalCorexAddressRestored": true,
+  "temporaryServiceRemoved": true,
+  "sourceHashesUnchanged": true,
+  "lifecycle": {
+    "samples": 105,
+    "unknownWithZeroAvailable": 23,
+    "reservedAndSessionFreeWithZeroAvailable": 61,
+    "violations": [],
+    "readErrors": [],
+    "scope": "Endpoint status invariants only; observations across objects are not atomic"
+  },
+  "physicalTopology": "one ARM node; clients without devices/SDK hostPath; real CoreX GPU and MLU NPU servers"
+}

@@ -1,0 +1,112 @@
+{
+  "apiVersion": "accelerator.qcrs.io/v1alpha1",
+  "kind": "AcceleratorLease",
+  "metadata": {
+    "annotations": {
+      "accelerator.qcrs.io/decision-policy": "local-first-fit/v1",
+      "accelerator.qcrs.io/decision-reason": "selected 1 remote device(s) from endpoint corex-remote-server in pool corex-remote",
+      "accelerator.qcrs.io/workload-name": "corex-queued-outage"
+    },
+    "creationTimestamp": "2026-11-19T13:18:21Z",
+    "generation": 1,
+    "labels": {
+      "accelerator.qcrs.io/workload": "corex-queued-outage",
+      "accelerator.qcrs.io/workload-uid": "fcacc378-366f-487f-89a9-d386b81b59e1"
+    },
+    "name": "corex-queued-outage-fcacc378-lease-1",
+    "namespace": "accelerator-validation-1119131528",
+    "ownerReferences": [
+      {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "blockOwnerDeletion": true,
+        "controller": true,
+        "kind": "AcceleratorWorkload",
+        "name": "corex-queued-outage",
+        "uid": "fcacc378-366f-487f-89a9-d386b81b59e1"
+      }
+    ],
+    "resourceVersion": "280870",
+    "uid": "80469fde-ea70-4a71-b2d4-7edad11063b4"
+  },
+  "spec": {
+    "driver": "corex-remote",
+    "mode": "Remote",
+    "owner": {
+      "apiVersion": "accelerator.qcrs.io/v1alpha1",
+      "kind": "AcceleratorWorkload",
+      "name": "corex-queued-outage",
+      "namespace": "accelerator-validation-1119131528",
+      "uid": "fcacc378-366f-487f-89a9-d386b81b59e1"
+    },
+    "poolRef": {
+      "name": "corex-remote"
+    },
+    "providerRef": {
+      "name": "corex-remote"
+    },
+    "request": {
+      "containerName": "worker",
+      "count": 1,
+      "deviceType": "GPU",
+      "memory": "0",
+      "vendor": "iluvatar"
+    },
+    "targets": [
+      {
+        "deviceIDs": [
+          "gpu-0"
+        ],
+        "endpointName": "corex-remote-server",
+        "exclusive": true
+      }
+    ],
+    "ttl": "5m0s",
+    "workloadGeneration": 2
+  },
+  "status": {
+    "binding": {
+      "endpoints": [
+        {
+          "address": "corex-remote-server-0.corex-remote-server.accelerator-system.svc.cluster.local:50051",
+          "name": "corex-remote-server",
+          "parameters": {
+            "observationPort": "50052"
+          },
+          "runtime": {
+            "apiVersion": "3",
+            "driver": "corex-remote",
+            "version": "corex-remote-arm64-4.4"
+          }
+        }
+      ],
+      "id": "remote/80469fde-ea70-4a71-b2d4-7edad11063b4"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-19T13:18:24Z",
+        "message": "accelerator capacity was released",
+        "observedGeneration": 1,
+        "reason": "Released",
+        "status": "False",
+        "type": "Reserved"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T13:18:21Z",
+        "message": "runtime configuration was injected and the workload Pod was created",
+        "observedGeneration": 1,
+        "reason": "Materialized",
+        "status": "True",
+        "type": "RuntimeReady"
+      }
+    ],
+    "observedGeneration": 1,
+    "phase": "Released",
+    "podRef": {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "name": "corex-queued-outage-fcacc378",
+      "namespace": "accelerator-validation-1119131528",
+      "uid": "69284918-e3ea-4ef1-bdc0-2d37372d533c"
+    }
+  }
+}

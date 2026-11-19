@@ -1,0 +1,29 @@
+{
+  "apiVersion": "v1",
+  "kind": "Service",
+  "metadata": {
+    "name": "corex-nat-1119131528",
+    "namespace": "accelerator-system",
+    "labels": {
+      "accelerator.qcrs.io/validation": "accelerator-validation-1119131528"
+    }
+  },
+  "spec": {
+    "type": "ClusterIP",
+    "selector": {
+      "app.kubernetes.io/name": "corex-remote-server"
+    },
+    "ports": [
+      {
+        "name": "remote",
+        "port": 50051,
+        "targetPort": "remote"
+      },
+      {
+        "name": "observation",
+        "port": 50052,
+        "targetPort": "observation"
+      }
+    ]
+  }
+}

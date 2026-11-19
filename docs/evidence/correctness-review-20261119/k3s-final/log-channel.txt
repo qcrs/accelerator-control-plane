@@ -1,0 +1,1 @@
+I1119 13:13:11.763356       1 leaderelection.go:258] "Attempting to acquire leader lease..." lock="accelerator-system/accelerator-control-plane.qcrs.io"

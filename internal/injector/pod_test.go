@@ -100,7 +100,7 @@ func TestMutateAddsLocalResourceAndNodeAffinity(t *testing.T) {
 		t.Fatalf("expected two GPUs, got %s", got.String())
 	}
 	terms := mutated.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms
-	if len(terms) != 1 || len(terms[0].MatchExpressions) != 1 || terms[0].MatchExpressions[0].Values[0] != "node-a" {
+	if len(terms) != 1 || len(terms[0].MatchFields) != 1 || terms[0].MatchFields[0].Key != "metadata.name" || terms[0].MatchFields[0].Values[0] != "node-a" {
 		t.Fatalf("unexpected node affinity: %#v", terms)
 	}
 }
@@ -112,7 +112,7 @@ func TestMutateNarrowsExistingNodeAffinityToSelectedNode(t *testing.T) {
 			RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
 				NodeSelectorTerms: []corev1.NodeSelectorTerm{{
 					MatchExpressions: []corev1.NodeSelectorRequirement{{
-						Key: hostnameLabel, Operator: corev1.NodeSelectorOpIn, Values: []string{"node-a", "node-b"},
+						Key: corev1.LabelHostname, Operator: corev1.NodeSelectorOpIn, Values: []string{"node-a", "node-b"},
 					}},
 				}},
 			},
@@ -125,9 +125,24 @@ func TestMutateNarrowsExistingNodeAffinityToSelectedNode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("mutation failed: %v", err)
 	}
-	expressions := mutated.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0].MatchExpressions
-	if len(expressions) != 2 || len(expressions[1].Values) != 1 || expressions[1].Values[0] != "node-a" {
-		t.Fatalf("selected node was not enforced exactly: %#v", expressions)
+	term := mutated.Spec.Affinity.NodeAffinity.RequiredDuringSchedulingIgnoredDuringExecution.NodeSelectorTerms[0]
+	if len(term.MatchExpressions) != 1 || len(term.MatchFields) != 1 || term.MatchFields[0].Values[0] != "node-a" {
+		t.Fatalf("selected node was not enforced while preserving the original affinity: %#v", term)
+	}
+}
+
+func TestMutateDoesNotMakeEmptyRequiredAffinitySchedulable(t *testing.T) {
+	for _, terms := range [][]corev1.NodeSelectorTerm{nil, {{}}} {
+		template := corev1.PodTemplateSpec{Spec: corev1.PodSpec{
+			Containers: []corev1.Container{{Name: "worker"}},
+			Affinity: &corev1.Affinity{NodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{NodeSelectorTerms: terms},
+			}},
+		}}
+		_, err := NewPodMutator().Mutate(template, contracts.RuntimePlan{ContainerName: "worker", RequiredNodeName: "node-a"})
+		if err == nil {
+			t.Fatalf("empty required affinity became schedulable: %+v", terms)
+		}
 	}
 }
 

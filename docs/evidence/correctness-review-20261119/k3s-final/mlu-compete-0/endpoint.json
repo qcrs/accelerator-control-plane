@@ -1,0 +1,82 @@
+{
+  "apiVersion": "accelerator.qcrs.io/v1alpha1",
+  "kind": "AcceleratorEndpoint",
+  "metadata": {
+    "annotations": {
+      "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"accelerator.qcrs.io/v1alpha1\",\"kind\":\"AcceleratorEndpoint\",\"metadata\":{\"annotations\":{},\"labels\":{\"accelerator.qcrs.io/runtime\":\"mlu-remote\"},\"name\":\"mlu-remote-server\"},\"spec\":{\"address\":\"mlu-remote-server.accelerator-system.svc:50051\",\"devices\":[{\"health\":\"Healthy\",\"id\":\"mlu-0\",\"memory\":\"24Gi\",\"model\":\"MLU370-S4\",\"resourceForm\":\"WholeDevice\",\"vendor\":\"cambricon\"}],\"parameters\":{\"observationPort\":\"50052\"},\"poolRef\":{\"name\":\"mlu-remote\"},\"runtime\":{\"apiVersion\":\"1\",\"driver\":\"mlu-remote\",\"version\":\"mlu-remote-runtime-arm64-20261116\"}}}\n"
+    },
+    "creationTimestamp": "2026-11-16T03:58:55Z",
+    "generation": 2,
+    "labels": {
+      "accelerator.qcrs.io/runtime": "mlu-remote"
+    },
+    "name": "mlu-remote-server",
+    "resourceVersion": "280737",
+    "uid": "fc1be005-8ddf-49e2-9c69-68f7f63282f6"
+  },
+  "spec": {
+    "address": "mlu-remote-server.accelerator-system.svc:50051",
+    "devices": [
+      {
+        "health": "Healthy",
+        "id": "mlu-0",
+        "memory": "24Gi",
+        "model": "MLU370-S4",
+        "resourceForm": "WholeDevice",
+        "vendor": "cambricon"
+      }
+    ],
+    "parameters": {
+      "observationPort": "50052"
+    },
+    "poolRef": {
+      "name": "mlu-remote"
+    },
+    "runtime": {
+      "apiVersion": "1",
+      "driver": "mlu-remote",
+      "version": "mlu-remote-runtime-arm64-20261116"
+    }
+  },
+  "status": {
+    "activeSessions": 0,
+    "available": 1,
+    "capacity": {
+      "available": 1,
+      "total": 1
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-16T03:58:55Z",
+        "message": "endpoint exposes 1 statically validated device(s)",
+        "observedGeneration": 2,
+        "reason": "ConfigurationValid",
+        "status": "True",
+        "type": "Configured"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T09:49:36Z",
+        "message": "runtime responded with device enumeration and live session/cleanup accounting; this is not a kernel correctness test",
+        "observedGeneration": 2,
+        "reason": "RuntimeObserved",
+        "status": "True",
+        "type": "Ready"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T13:17:41Z",
+        "message": "runtime sessions and the ledger are observationally compatible; aggregate counts cannot prove session ownership",
+        "observedGeneration": 2,
+        "reason": "SessionsAccounted",
+        "status": "True",
+        "type": "SessionsConsistent"
+      }
+    ],
+    "confidence": "Observed",
+    "health": "Healthy",
+    "message": "runtime responded with device enumeration and live session/cleanup accounting; this is not a kernel correctness test",
+    "observationSource": "remote-probe",
+    "observedAt": "2026-11-19T13:17:41Z",
+    "observedGeneration": 2,
+    "reason": "RuntimeObserved"
+  }
+}

@@ -1,0 +1,9 @@
+--- FAIL: TestCleanupStillChecksUncertainAndAcquiredClaimOwnership (0.09s)
+    --- FAIL: TestCleanupStillChecksUncertainAndAcquiredClaimOwnership/unconfirmed (0.03s)
+        claim_conflict_cleanup_test.go:96: ownership uncertainty was suppressed during cleanup: Operation cannot be fulfilled on acceleratorleases.accelerator.qcrs.io "cleanup-uncertain-cleanup--lease-1": lifecycle snapshot is stale
+FAIL
+FAIL	github.com/qcrs/accelerator-control-plane/internal/controller	2.816s
+ok  	github.com/qcrs/accelerator-control-plane/internal/inventory	0.173s
+ok  	github.com/qcrs/accelerator-control-plane/internal/injector	0.010s
+ok  	github.com/qcrs/accelerator-control-plane/internal/allocation	0.168s
+FAIL

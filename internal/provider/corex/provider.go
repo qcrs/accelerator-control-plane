@@ -5,12 +5,12 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"path"
 	"strconv"
 	"strings"
 
 	acceleratorv1alpha1 "github.com/qcrs/accelerator-control-plane/api/v1alpha1"
 	"github.com/qcrs/accelerator-control-plane/internal/contracts"
+	providercommon "github.com/qcrs/accelerator-control-plane/internal/provider"
 	"github.com/qcrs/accelerator-control-plane/internal/provider/observation"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -21,9 +21,7 @@ const (
 	defaultMountPath  = "/opt/accelerator/corex"
 	defaultPort       = 50051
 	parameterPort     = "port"
-	runtimeInitName   = "accelerator-runtime-setup"
-	runtimeVolume     = "accelerator-runtime"
-	runtimeCopyPath   = "/runtime"
+	runtimeInitName   = providercommon.RuntimeInitContainerName
 )
 
 type Provider struct{}
@@ -123,35 +121,23 @@ func (p *Provider) BuildRuntimePlan(
 		return contracts.RuntimePlan{}, err
 	}
 
-	return contracts.RuntimePlan{
-		Mode:          acceleratorv1alpha1.ExecutionModeRemote,
-		ContainerName: lease.Spec.Request.ContainerName,
-		Volumes: []corev1.Volume{{
-			Name:         runtimeVolume,
-			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
-		}},
-		InitContainers: []corev1.Container{{
-			Name:         runtimeInitName,
-			Image:        provider.Spec.ClientRuntime.Image,
-			Command:      []string{"/bin/cp"},
-			Args:         []string{"-a", strings.TrimSuffix(sourcePath, "/") + "/.", runtimeCopyPath + "/"},
-			VolumeMounts: []corev1.VolumeMount{{Name: runtimeVolume, MountPath: runtimeCopyPath}},
-		}},
-		Env: []corev1.EnvVar{
-			{Name: "COREX_REMOTE_HOST", Value: host},
-			{Name: "COREX_REMOTE_PORT", Value: port},
-			{Name: "LD_LIBRARY_PATH", Value: strings.Join([]string{mountPath}, ":")},
-		},
-		VolumeMounts: []corev1.VolumeMount{{Name: runtimeVolume, MountPath: mountPath, ReadOnly: true}},
-		Annotations: map[string]string{
-			contracts.RuntimeInitContainersAnnotation: runtimeInitName,
-			"accelerator.qcrs.io/mode":                string(acceleratorv1alpha1.ExecutionModeRemote),
-			"accelerator.qcrs.io/provider":            lease.Spec.ProviderRef.Name,
-			"accelerator.qcrs.io/pool":                lease.Spec.PoolRef.Name,
-			"accelerator.qcrs.io/lease":               lease.Name,
-			"accelerator.qcrs.io/endpoint":            binding.Name,
-		},
-	}, nil
+	plan := providercommon.LibraryRuntimePlan(provider.Spec.ClientRuntime.Image, sourcePath, mountPath)
+	plan.Mode = acceleratorv1alpha1.ExecutionModeRemote
+	plan.ContainerName = lease.Spec.Request.ContainerName
+	plan.Env = []corev1.EnvVar{
+		{Name: "COREX_REMOTE_HOST", Value: host},
+		{Name: "COREX_REMOTE_PORT", Value: port},
+		{Name: "LD_LIBRARY_PATH", Value: strings.Join([]string{mountPath}, ":")},
+	}
+	plan.Annotations = map[string]string{
+		contracts.RuntimeInitContainersAnnotation: runtimeInitName,
+		"accelerator.qcrs.io/mode":                string(acceleratorv1alpha1.ExecutionModeRemote),
+		"accelerator.qcrs.io/provider":            lease.Spec.ProviderRef.Name,
+		"accelerator.qcrs.io/pool":                lease.Spec.PoolRef.Name,
+		"accelerator.qcrs.io/lease":               lease.Name,
+		"accelerator.qcrs.io/endpoint":            binding.Name,
+	}
+	return plan, nil
 }
 
 func (p *Provider) ValidateEndpoint(endpoint contracts.RemoteEndpoint) error {
@@ -193,21 +179,7 @@ func endpointConnection(address string, parameters map[string]string) (string, s
 }
 
 func runtimePaths(runtime *acceleratorv1alpha1.ClientRuntimeSpec) (string, string, error) {
-	if runtime == nil {
-		return "", "", contracts.NewError(contracts.ErrorKindInvalid, "validate CoreX provider", "clientRuntime is required")
-	}
-	sourcePath := runtime.SourcePath
-	if sourcePath == "" {
-		sourcePath = defaultSourcePath
-	}
-	mountPath := runtime.MountPath
-	if mountPath == "" {
-		mountPath = defaultMountPath
-	}
-	if !path.IsAbs(sourcePath) || !path.IsAbs(mountPath) || path.Clean(sourcePath) == "/" || path.Clean(mountPath) == "/" {
-		return "", "", contracts.NewError(contracts.ErrorKindInvalid, "validate CoreX provider", "runtime sourcePath and mountPath must be non-root absolute paths")
-	}
-	return path.Clean(sourcePath), path.Clean(mountPath), nil
+	return providercommon.ClientRuntimePaths(runtime, defaultSourcePath, defaultMountPath, "validate CoreX provider")
 }
 
 func remoteAllocationMode(config *acceleratorv1alpha1.RemotePoolConfig) acceleratorv1alpha1.RemoteAllocationMode {

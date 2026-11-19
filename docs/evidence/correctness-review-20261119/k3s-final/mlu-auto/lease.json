@@ -1,0 +1,112 @@
+{
+  "apiVersion": "accelerator.qcrs.io/v1alpha1",
+  "kind": "AcceleratorLease",
+  "metadata": {
+    "annotations": {
+      "accelerator.qcrs.io/decision-policy": "local-first-fit/v1",
+      "accelerator.qcrs.io/decision-reason": "selected 1 remote device(s) from endpoint mlu-remote-server in pool mlu-remote",
+      "accelerator.qcrs.io/workload-name": "mlu-auto"
+    },
+    "creationTimestamp": "2026-11-19T13:16:38Z",
+    "generation": 1,
+    "labels": {
+      "accelerator.qcrs.io/workload": "mlu-auto",
+      "accelerator.qcrs.io/workload-uid": "56d5fb7e-7973-4c9a-a239-a7d480207ebb"
+    },
+    "name": "mlu-auto-56d5fb7e-lease-1",
+    "namespace": "accelerator-validation-1119131528",
+    "ownerReferences": [
+      {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "blockOwnerDeletion": true,
+        "controller": true,
+        "kind": "AcceleratorWorkload",
+        "name": "mlu-auto",
+        "uid": "56d5fb7e-7973-4c9a-a239-a7d480207ebb"
+      }
+    ],
+    "resourceVersion": "280578",
+    "uid": "1a8d91cb-9b48-473d-b399-28990f9f7b28"
+  },
+  "spec": {
+    "driver": "mlu-remote",
+    "mode": "Remote",
+    "owner": {
+      "apiVersion": "accelerator.qcrs.io/v1alpha1",
+      "kind": "AcceleratorWorkload",
+      "name": "mlu-auto",
+      "namespace": "accelerator-validation-1119131528",
+      "uid": "56d5fb7e-7973-4c9a-a239-a7d480207ebb"
+    },
+    "poolRef": {
+      "name": "mlu-remote"
+    },
+    "providerRef": {
+      "name": "mlu-remote"
+    },
+    "request": {
+      "containerName": "worker",
+      "count": 1,
+      "deviceType": "NPU",
+      "memory": "0",
+      "vendor": "cambricon"
+    },
+    "targets": [
+      {
+        "deviceIDs": [
+          "mlu-0"
+        ],
+        "endpointName": "mlu-remote-server",
+        "exclusive": true
+      }
+    ],
+    "ttl": "5m0s",
+    "workloadGeneration": 2
+  },
+  "status": {
+    "binding": {
+      "endpoints": [
+        {
+          "address": "mlu-remote-server.accelerator-system.svc:50051",
+          "name": "mlu-remote-server",
+          "parameters": {
+            "observationPort": "50052"
+          },
+          "runtime": {
+            "apiVersion": "1",
+            "driver": "mlu-remote",
+            "version": "mlu-remote-runtime-arm64-20261116"
+          }
+        }
+      ],
+      "id": "remote/1a8d91cb-9b48-473d-b399-28990f9f7b28"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-19T13:16:41Z",
+        "message": "accelerator capacity was released",
+        "observedGeneration": 1,
+        "reason": "Released",
+        "status": "False",
+        "type": "Reserved"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T13:16:38Z",
+        "message": "runtime configuration was injected and the workload Pod was created",
+        "observedGeneration": 1,
+        "reason": "Materialized",
+        "status": "True",
+        "type": "RuntimeReady"
+      }
+    ],
+    "observedGeneration": 1,
+    "phase": "Released",
+    "podRef": {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "name": "mlu-auto-56d5fb7e",
+      "namespace": "accelerator-validation-1119131528",
+      "uid": "8fb5fd7b-8e2a-469d-94b3-5d25fe996d43"
+    }
+  }
+}

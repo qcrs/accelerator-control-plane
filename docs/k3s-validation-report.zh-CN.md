@@ -1,5 +1,7 @@
 # 新版 K3s 验收记录（2026-11-19）
 
+后续更新（13:24 UTC）：正确性修复版本 `arm64-correctness-20261119-v2` 已再次完成 13/13 与独立复核，详见 [平台正确性审查](platform-correctness-review.zh-CN.md)。下文保留早先 `arm64-logic-20261119-v3` 的部署与验收记录。
+
 ## 当前结果
 
 **真实 Kubernetes 完整矩阵 13/13 PASS，最终资源和证据复核 PASS。** 测试于 `2026-11-19 09:43:57–09:52:19 UTC` 在单 ARM 节点 K3s 上执行；客户端 Pod 无本地 GPU/NPU 设备和 SDK hostPath，计算实际由 CoreX GPU / MLU NPU 服务端完成。

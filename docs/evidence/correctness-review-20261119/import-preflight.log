@@ -1,0 +1,3 @@
+2026-11-19T13:12:30.288277+00:00 attempt 1
+PASS: same cluster, no active tasks/claims, and all image tags reported by kubelet
+Image tags are a preflight check; runtime image digests still need checking after rollout.

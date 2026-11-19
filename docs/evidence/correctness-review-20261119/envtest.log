@@ -1,0 +1,6 @@
+=== RUN   TestCRDsAndAtomicEndpointClaimsWithEnvtest
+=== RUN   TestCRDsAndAtomicEndpointClaimsWithEnvtest/stale_status_cannot_undo_committed_Ready
+--- PASS: TestCRDsAndAtomicEndpointClaimsWithEnvtest (7.72s)
+    --- PASS: TestCRDsAndAtomicEndpointClaimsWithEnvtest/stale_status_cannot_undo_committed_Ready (0.07s)
+PASS
+ok  	github.com/qcrs/accelerator-control-plane/internal/controller	7.753s

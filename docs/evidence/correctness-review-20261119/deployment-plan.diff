@@ -1,0 +1,20 @@
+--- /tmp/LIVE-3736595830/apps.v1.Deployment.accelerator-system.accelerator-manager
++++ /tmp/MERGED-4150552612/apps.v1.Deployment.accelerator-system.accelerator-manager
+@@ -6,7 +6,7 @@
+     kubectl.kubernetes.io/last-applied-configuration: |
+       {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{"deployment.kubernetes.io/revision":"8"},"name":"accelerator-manager","namespace":"accelerator-system"},"spec":{"progressDeadlineSeconds":600,"replicas":2,"revisionHistoryLimit":10,"selector":{"matchLabels":{"app.kubernetes.io/name":"accelerator-control-plane"}},"strategy":{"rollingUpdate":{"maxSurge":"25%","maxUnavailable":"25%"},"type":"RollingUpdate"},"template":{"metadata":{"annotations":{"kubectl.kubernetes.io/restartedAt":"2026-11-16T12:47:10Z"},"labels":{"app.kubernetes.io/name":"accelerator-control-plane"}},"spec":{"containers":[{"args":["--leader-elect=true","--metrics-bind-address=:8080","--health-probe-bind-address=:8081","--coordination-namespace=accelerator-system"],"image":"accelerator-control-plane:arm64-logic-20261119-v3","imagePullPolicy":"Never","livenessProbe":{"failureThreshold":3,"httpGet":{"path":"/healthz","port":"health","scheme":"HTTP"},"periodSeconds":10,"successThreshold":1,"timeoutSeconds":1},"name":"manager","ports":[{"containerPort":8080,"name":"metrics","protocol":"TCP"},{"containerPort":8081,"name":"health","protocol":"TCP"}],"readinessProbe":{"failureThreshold":3,"httpGet":{"path":"/readyz","port":"health","scheme":"HTTP"},"periodSeconds":10,"successThreshold":1,"timeoutSeconds":1},"resources":{"limits":{"cpu":"1","memory":"512Mi"},"requests":{"cpu":"100m","memory":"128Mi"}},"securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]},"readOnlyRootFilesystem":true},"terminationMessagePath":"/dev/termination-log","terminationMessagePolicy":"File"}],"dnsPolicy":"ClusterFirst","restartPolicy":"Always","schedulerName":"default-scheduler","securityContext":{"runAsNonRoot":true,"seccompProfile":{"type":"RuntimeDefault"}},"serviceAccount":"accelerator-manager","serviceAccountName":"accelerator-manager","terminationGracePeriodSeconds":10}}}}
+   creationTimestamp: "2026-11-16T02:45:07Z"
+-  generation: 10
++  generation: 11
+   name: accelerator-manager
+   namespace: accelerator-system
+   resourceVersion: "267022"
+@@ -36,7 +36,7 @@
+         - --metrics-bind-address=:8080
+         - --health-probe-bind-address=:8081
+         - --coordination-namespace=accelerator-system
+-        image: accelerator-control-plane:arm64-logic-20261119-v3
++        image: accelerator-control-plane:arm64-correctness-20261119-v2
+         imagePullPolicy: Never
+         livenessProbe:
+           failureThreshold: 3

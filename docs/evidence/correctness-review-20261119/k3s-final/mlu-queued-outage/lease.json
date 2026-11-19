@@ -1,0 +1,112 @@
+{
+  "apiVersion": "accelerator.qcrs.io/v1alpha1",
+  "kind": "AcceleratorLease",
+  "metadata": {
+    "annotations": {
+      "accelerator.qcrs.io/decision-policy": "local-first-fit/v1",
+      "accelerator.qcrs.io/decision-reason": "selected 1 remote device(s) from endpoint mlu-remote-server in pool mlu-remote",
+      "accelerator.qcrs.io/workload-name": "mlu-queued-outage"
+    },
+    "creationTimestamp": "2026-11-19T13:20:45Z",
+    "generation": 1,
+    "labels": {
+      "accelerator.qcrs.io/workload": "mlu-queued-outage",
+      "accelerator.qcrs.io/workload-uid": "f1627e66-d61d-422e-b34c-cd52f97801c4"
+    },
+    "name": "mlu-queued-outage-f1627e66-lease-1",
+    "namespace": "accelerator-validation-1119131528",
+    "ownerReferences": [
+      {
+        "apiVersion": "accelerator.qcrs.io/v1alpha1",
+        "blockOwnerDeletion": true,
+        "controller": true,
+        "kind": "AcceleratorWorkload",
+        "name": "mlu-queued-outage",
+        "uid": "f1627e66-d61d-422e-b34c-cd52f97801c4"
+      }
+    ],
+    "resourceVersion": "281249",
+    "uid": "b684ad46-031a-41af-bcf1-d16ca895815f"
+  },
+  "spec": {
+    "driver": "mlu-remote",
+    "mode": "Remote",
+    "owner": {
+      "apiVersion": "accelerator.qcrs.io/v1alpha1",
+      "kind": "AcceleratorWorkload",
+      "name": "mlu-queued-outage",
+      "namespace": "accelerator-validation-1119131528",
+      "uid": "f1627e66-d61d-422e-b34c-cd52f97801c4"
+    },
+    "poolRef": {
+      "name": "mlu-remote"
+    },
+    "providerRef": {
+      "name": "mlu-remote"
+    },
+    "request": {
+      "containerName": "worker",
+      "count": 1,
+      "deviceType": "NPU",
+      "memory": "0",
+      "vendor": "cambricon"
+    },
+    "targets": [
+      {
+        "deviceIDs": [
+          "mlu-0"
+        ],
+        "endpointName": "mlu-remote-server",
+        "exclusive": true
+      }
+    ],
+    "ttl": "5m0s",
+    "workloadGeneration": 2
+  },
+  "status": {
+    "binding": {
+      "endpoints": [
+        {
+          "address": "mlu-remote-server.accelerator-system.svc:50051",
+          "name": "mlu-remote-server",
+          "parameters": {
+            "observationPort": "50052"
+          },
+          "runtime": {
+            "apiVersion": "1",
+            "driver": "mlu-remote",
+            "version": "mlu-remote-runtime-arm64-20261116"
+          }
+        }
+      ],
+      "id": "remote/b684ad46-031a-41af-bcf1-d16ca895815f"
+    },
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-19T13:20:48Z",
+        "message": "accelerator capacity was released",
+        "observedGeneration": 1,
+        "reason": "Released",
+        "status": "False",
+        "type": "Reserved"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T13:20:45Z",
+        "message": "runtime configuration was injected and the workload Pod was created",
+        "observedGeneration": 1,
+        "reason": "Materialized",
+        "status": "True",
+        "type": "RuntimeReady"
+      }
+    ],
+    "observedGeneration": 1,
+    "phase": "Released",
+    "podRef": {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "name": "mlu-queued-outage-f1627e66",
+      "namespace": "accelerator-validation-1119131528",
+      "uid": "b67570a4-385e-45ca-9dba-27330c9fd8c8"
+    }
+  }
+}

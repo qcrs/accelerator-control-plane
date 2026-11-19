@@ -1,0 +1,14 @@
+{
+  "verifiedAt": "2026-11-19T13:09:37.147411+00:00",
+  "archiveSHA256": "e266cdb3b6d246f986c0801a72bc9fe64a638069ea6d1d6e2ea2732ff8419587",
+  "archiveBytes": 95418368,
+  "imageCount": 7,
+  "syntaxChecks": "PASS",
+  "deploymentPlan": "Only the manager image changes; generation increments automatically",
+  "hostImport": "USER_CONFIRMED",
+  "clusterModified": true,
+  "deployedManagerImage": "accelerator-control-plane:arm64-correctness-20261119-v2",
+  "k3sMatrix": "13/13 PASS",
+  "finalAudit": "PASS",
+  "acceptanceFinishedAt": "2026-11-19T13:23:50.520715+00:00"
+}

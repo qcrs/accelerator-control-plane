@@ -1,0 +1,2 @@
+PASS: numerical result, exit code, Released Lease and observed session cleanup
+LOCAL_DEVICES=NONE; DNS unchanged where required

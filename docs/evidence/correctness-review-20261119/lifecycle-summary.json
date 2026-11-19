@@ -1,0 +1,8 @@
+{
+  "samples": 105,
+  "unknownWithZeroAvailable": 23,
+  "reservedAndSessionFreeWithZeroAvailable": 61,
+  "violations": [],
+  "readErrors": [],
+  "scope": "Endpoint status invariants only; observations across objects are not atomic"
+}

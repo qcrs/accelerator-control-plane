@@ -1,0 +1,177 @@
+{
+  "apiVersion": "accelerator.qcrs.io/v1alpha1",
+  "kind": "AcceleratorWorkload",
+  "metadata": {
+    "creationTimestamp": "2026-11-19T13:17:51Z",
+    "finalizers": [
+      "accelerator.qcrs.io/workload-protection"
+    ],
+    "generation": 2,
+    "name": "corex-queued-outage",
+    "namespace": "accelerator-validation-1119131528",
+    "resourceVersion": "280872",
+    "uid": "fcacc378-366f-487f-89a9-d386b81b59e1"
+  },
+  "spec": {
+    "accelerator": {
+      "containerName": "worker",
+      "count": 1,
+      "deviceType": "GPU",
+      "memory": "0",
+      "vendor": "iluvatar"
+    },
+    "placement": {
+      "fallback": {
+        "backoff": "2s",
+        "enabled": true,
+        "maxAttempts": 2,
+        "startupTimeout": "2m0s"
+      },
+      "mode": "Auto",
+      "order": [
+        "Local",
+        "Remote"
+      ],
+      "reservationTTL": "5m0s"
+    },
+    "podTemplate": {
+      "metadata": {
+        "labels": {
+          "app": "corex-remote-smoke"
+        }
+      },
+      "spec": {
+        "activeDeadlineSeconds": 240,
+        "automountServiceAccountToken": false,
+        "containers": [
+          {
+            "args": [
+              "for device in /dev/nvidia* /dev/iluvatar* /dev/cambricon* /dev/cndrv* /dev/davinci* /dev/ascend*; do\n  if [ -e \"$device\" ]; then echo \"FAIL local accelerator visible: $device\"; exit 80; fi\ndone\necho LOCAL_ACCELERATOR_DEVICES=NONE\ni=0\nwhile [ \"$i\" -lt 1 ]; do\n  /opt/workload/driver_smoke_app /opt/workload/driver_kernel.cubin\n  i=$((i + 1))\n  if [ \"$i\" -lt 1 ]; then sleep 2; fi\ndone\necho KERNEL_FINISHED\nsleep 0\nexit 0\n"
+            ],
+            "command": [
+              "/bin/sh",
+              "-ec"
+            ],
+            "env": [
+              {
+                "name": "COREX_SMOKE_TRACE",
+                "value": "1"
+              }
+            ],
+            "image": "corex-workload:arm64-observed-v1",
+            "imagePullPolicy": "Never",
+            "name": "worker",
+            "resources": {
+              "limits": {
+                "memory": "128Mi"
+              },
+              "requests": {
+                "cpu": "10m",
+                "memory": "32Mi"
+              }
+            },
+            "securityContext": {
+              "allowPrivilegeEscalation": false,
+              "capabilities": {
+                "drop": [
+                  "ALL"
+                ]
+              },
+              "runAsNonRoot": true,
+              "runAsUser": 65532
+            }
+          }
+        ],
+        "restartPolicy": "Never"
+      }
+    }
+  },
+  "status": {
+    "allocationAttempt": 1,
+    "allocationRef": "corex-queued-outage-fcacc378-lease-1",
+    "conditions": [
+      {
+        "lastTransitionTime": "2026-11-19T13:17:51Z",
+        "message": "workload specification is valid",
+        "observedGeneration": 2,
+        "reason": "Valid",
+        "status": "True",
+        "type": "Accepted"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T13:18:21Z",
+        "message": "selected 1 remote device(s) from endpoint corex-remote-server in pool corex-remote",
+        "observedGeneration": 2,
+        "reason": "Selected",
+        "status": "True",
+        "type": "Selected"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T13:18:21Z",
+        "message": "accelerator capacity is reserved",
+        "observedGeneration": 2,
+        "reason": "Reserved",
+        "status": "True",
+        "type": "Reserved"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T13:18:21Z",
+        "message": "runtime configuration was injected and the workload Pod was created",
+        "observedGeneration": 2,
+        "reason": "Materialized",
+        "status": "True",
+        "type": "RuntimeReady"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T13:18:23Z",
+        "message": "pod terminated with phase Succeeded",
+        "observedGeneration": 2,
+        "reason": "Terminated",
+        "status": "False",
+        "type": "PodReady"
+      },
+      {
+        "lastTransitionTime": "2026-11-19T13:18:21Z",
+        "message": "all selected remote endpoints remain configured and ready",
+        "observedGeneration": 2,
+        "reason": "EndpointsHealthy",
+        "status": "False",
+        "type": "Degraded"
+      }
+    ],
+    "decision": {
+      "decidedAt": "2026-11-19T13:18:21Z",
+      "mode": "Remote",
+      "policy": "local-first-fit/v1",
+      "poolRef": {
+        "name": "corex-remote"
+      },
+      "providerRef": {
+        "name": "corex-remote"
+      },
+      "reason": "selected 1 remote device(s) from endpoint corex-remote-server in pool corex-remote",
+      "targets": [
+        {
+          "deviceIDs": [
+            "gpu-0"
+          ],
+          "endpointName": "corex-remote-server",
+          "exclusive": true
+        }
+      ]
+    },
+    "fallback": {
+      "readyObserved": true
+    },
+    "observedGeneration": 2,
+    "phase": "Succeeded",
+    "podRef": {
+      "apiVersion": "v1",
+      "kind": "Pod",
+      "name": "corex-queued-outage-fcacc378",
+      "namespace": "accelerator-validation-1119131528",
+      "uid": "69284918-e3ea-4ef1-bdc0-2d37372d533c"
+    },
+    "selectedMode": "Remote"
+  }
+}
